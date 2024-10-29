@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Final, Optional
+from typing import Final
 
 import msgspec
 import numpy as np
@@ -9,6 +9,7 @@ from numpy.typing import NDArray
 from altitude import calculate_altitude_profile
 from density import mass
 from molecular_crosssections.molecular_metrics import (
+    MOLECULAR_WEIGHTS,
     MoleculeMetrics,
     calculate_molecular_metrics,
 )
@@ -17,6 +18,7 @@ from test_inputs.test_inputs_as_dicts import (
     test_log_pressures,
     test_temperatures,
 )
+from xarray_serialization import XarrayDataArray, XarrayDataset
 
 GRAVITATIONAL_CONSTANT_IN_CGS: Final[float] = 6.67408e-8  # [cm^3 g^-1 s^-2]
 BOLTZMANN_CONSTANT_IN_CGS: Final[float] = 1.38065e-16  # [cm^2 g s^-2 K^-1]
@@ -94,10 +96,38 @@ if __name__ == "__main__":
             coords=shared_coordinates,
             dims=["pressure"],
             name=f"{species} mixing ratio",
-            attrs={"units": "dimensionless"},
+            attrs={
+                "molecular_weight": MOLECULAR_WEIGHTS[species],
+                "units": "dimensionless",
+            },
         )
         for species, abundance in fiducial_test_abundances.items()
     }
+
+    test_molecular_mixing_ratios_dataset: xr.Dataset = xr.Dataset(
+        data_vars=test_molecular_mixing_ratios,
+        coords=shared_coordinates,
+        attrs=msgspec.structs.asdict(fiducial_molecular_metrics),
+    )
+
+    test_molecular_partial_pressure_fractions: dict[str, xr.DataArray] = {
+        species: xr.DataArray(
+            abundance.attrs["molecular_weight"]
+            * abundance.values
+            / test_molecular_mixing_ratios_dataset.attrs["mean_molecular_weight"],
+            coords=shared_coordinates,
+            dims=["pressure"],
+            name=f"{species} partial pressure",
+            attrs={"molecular_weight": MOLECULAR_WEIGHTS[species], "units": "bar"},
+        )
+        for species, abundance in test_molecular_mixing_ratios_dataset.data_vars.items()
+    }
+
+    test_molecular_partial_pressure_fractions_dataset: xr.Dataset = xr.Dataset(
+        data_vars=test_molecular_partial_pressure_fractions,
+        coords=shared_coordinates,
+        attrs=msgspec.structs.asdict(fiducial_molecular_metrics),
+    )
 
     test_vertical_dataset: xr.Dataset = xr.Dataset(
         data_vars={
@@ -113,15 +143,48 @@ if __name__ == "__main__":
         },
     )
 
-    test_molecular_inputs_dataset: xr.Dataset = xr.Dataset(
-        data_vars=test_molecular_mixing_ratios,
+    test_molecular_number_densities: dict[str, xr.DataArray] = {
+        species: xr.DataArray(
+            partial_pressure_fraction
+            * (partial_pressure_fraction.pressure.values * BAR_TO_BARYE)
+            / (BOLTZMANN_CONSTANT_IN_CGS * test_vertical_dataset.temperature.values),
+            coords=shared_coordinates,
+            dims=["pressure"],
+            name=f"{species} mass density",
+            attrs={"molecular_weight": MOLECULAR_WEIGHTS[species], "units": "cm^-3"},
+        )
+        for species, partial_pressure_fraction in test_molecular_partial_pressure_fractions_dataset.data_vars.items()
+    }
+
+    test_molecular_number_densities_dataset: xr.Dataset = xr.Dataset(
+        data_vars=test_molecular_number_densities,
+        coords=shared_coordinates,
+        attrs=msgspec.structs.asdict(fiducial_molecular_metrics),
+    )
+
+    test_molecular_mass_densities: dict[str, xr.DataArray] = {
+        species: xr.DataArray(
+            number_density * number_density.attrs["molecular_weight"] * AMU_IN_GRAMS,
+            coords=shared_coordinates,
+            dims=["pressure"],
+            name=f"{species} mass density",
+            attrs={"molecular_weight": MOLECULAR_WEIGHTS[species], "units": "g cm^-3"},
+        )
+        for species, number_density in test_molecular_number_densities_dataset.data_vars.items()
+    }
+
+    test_molecular_mass_densities_dataset: xr.Dataset = xr.Dataset(
+        data_vars=test_molecular_mass_densities,
         coords=shared_coordinates,
         attrs=msgspec.structs.asdict(fiducial_molecular_metrics),
     )
 
     vertical_datatree_structure: dict[str, xr.Dataset] = {
         "./vertical_structure": test_vertical_dataset,
-        "./molecular_inputs": test_molecular_inputs_dataset,
+        "./molecular_inputs/mixing_ratios": test_molecular_mixing_ratios_dataset,
+        "./molecular_inputs/partial_pressure_fractions": test_molecular_partial_pressure_fractions_dataset,
+        "./molecular_inputs/number_densities": test_molecular_number_densities_dataset,
+        "./molecular_inputs/mass_densities": test_molecular_mass_densities_dataset,
     }
 
     vertical_datatree: xr.DataTree = xr.DataTree.from_dict(vertical_datatree_structure)
@@ -131,30 +194,9 @@ if __name__ == "__main__":
 
     test_vertical_as_dict: dict = test_vertical_dataset.to_dict()
     test_altitude_as_dict: dict = test_vertical_dataset.altitude.to_dict()
-
-    type XarrayDimension = tuple[str, ...]
-    type XarrayData = list[float]
-
-    class UnitsAttrs(msgspec.Struct):
-        units: str
-
-    class XarrayVariable(msgspec.Struct):
-        dims: XarrayDimension
-        attrs: UnitsAttrs
-        data: XarrayData
-
-    class XarrayDataArray(msgspec.Struct):
-        dims: XarrayDimension
-        attrs: UnitsAttrs
-        data: XarrayData
-        coords: dict[str, XarrayVariable]
-        name: str
-
-    class XarrayDataset(msgspec.Struct):
-        dims: XarrayDimension
-        data_vars: dict[str, XarrayDataArray]
-        coords: dict[str, XarrayVariable]
-        attrs: Optional[dict[str, str | float]]
+    test_number_density_as_dict: dict = (
+        test_molecular_number_densities_dataset.to_dict()
+    )
 
     msg_altitude: XarrayDataArray = XarrayDataArray(**test_altitude_as_dict)
     msg_vertical: XarrayDataset = XarrayDataset(**test_vertical_as_dict)
@@ -164,3 +206,6 @@ if __name__ == "__main__":
 
     with open(test_data_structure_directory / "test_vertical.toml", "wb") as file:
         file.write(msgspec.toml.encode(msg_vertical))
+
+    with open(test_data_structure_directory / "test_number_density.toml", "wb") as file:
+        file.write(msgspec.toml.encode(test_number_density_as_dict))
