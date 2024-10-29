@@ -1,0 +1,5 @@
+.DS_Store
+*.pyc
+syncthing*
+
+molecular_crosssections/reference_data/nir.nc

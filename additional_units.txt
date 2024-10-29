@@ -1,0 +1,8 @@
+Earth_mass = 5.9736e27 * grams = M_earth = M_Earth = _ = Earth_masses
+Earth_radius = 6.371e8 * centimeters = R_earth = R_Earth = _ = Earth_radii
+
+Jupiter_mass = 1.898e30 * grams = M_jup = M_Jup = _ = Jupiter_masses
+Jupiter_radius = 11.2 * Earth_radii = R_jup = R_Jup = _ = Jupiter_radii
+
+log10_invs2 = 1 / seconds**2; logbase: 10; logfactor: 1
+log10_cm = centimeters; logbase: 10; logfactor: 1
