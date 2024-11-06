@@ -1,10 +1,44 @@
-from typing import Any, Optional, Type
+from typing import (
+    Annotated,
+    Literal,
+    Optional,
+    Required,
+    Type,
+    TypeAlias,
+    TypedDict,
+)
 
 import msgspec
 import xarray as xr
 
+# from nptyping import DataFrame, Float, NDArray, Shape, Structure
+
 type XarrayDimension = tuple[str, ...]
 type XarrayData = list[float]
+
+"""
+Ideas to jot down here for easy reference:
+xarray dataset print-outs (reprs) already show
+shape and structure information under "dimensions"
+that look a lot like they could be annotations in
+something like nptyping.
+"""
+
+
+BaseUnits: Type = Literal["[mass]", "[time]", "[length]", "[temperature]"]
+BaseUnitType: TypeAlias = Annotated[str, BaseUnits]
+UnitType: TypeAlias = tuple[tuple[BaseUnitType, int]]
+
+PressureUnits: UnitType = (("[mass]", 1), ("[time]", -2), ("[length]", -1))
+# PressureData: TypeAlias = NDArray[Shape["number_of_pressures"], Float]  # noqa: F821
+
+WavelengthUnits: UnitType = (("[length]", 1),)
+# WavelengthData: TypeAlias = NDArray[Shape["number_of_wavelengths"], Float]  # noqa: F821
+
+
+class QuantityAttrs(TypedDict):
+    units: Required[str]
+    unit_base_rep: UnitType
 
 
 class UnitsAttrs(msgspec.Struct):
@@ -50,6 +84,14 @@ def dec_hook(type: Type, obj: Any) -> Any:
     """
     pass
 '''
+
+"""
+class PressureCoordinate(XarrayVariable):
+    # data: PressureData
+    data: NDArray[np.float64]
+    dims: tuple[str, ...] = ("pressure",)
+    attrs: dict[str, Any]  # = {"units": PressureUnits}
+"""
 
 
 def convert_xarray_to_msgspec(dataset: xr.Dataset) -> dict:
