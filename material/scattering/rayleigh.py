@@ -1,17 +1,35 @@
-from pathlib import Path
-
 import numpy as np
-import xarray as xr
 from numpy.typing import NDArray
 
-REFERENCE_FREQUENCY: float = 5.0872638e14
+from xarray_functional_wrappers import Dimensionalize
+from xarray_serialization import PressureType, WavelengthType
+
+REFERENCE_FREQUENCY_IN_HZ: float = 5.0872638e14
+C_IN_CGS: float = 2.99792458e10
 
 
+# Note: don't need to specify dimensionality of any default
+# arguments, since xarray will know how to use it.
+@Dimensionalize(
+    argument_dimensions=(
+        (WavelengthType,),
+        (
+            PressureType,
+            WavelengthType,
+        ),
+    ),
+    result_dimensions=(
+        (
+            PressureType,
+            WavelengthType,
+        ),
+    ),
+)
 def calculate_rayleigh_scattering_crosssection(
-    wavelengths: NDArray[np.float64],
-    reference_crosssections: NDArray[np.float64],
-    reference_frequency: float = REFERENCE_FREQUENCY,
-) -> float:
-    frequencies: NDArray[np.float64] = 1 / (wavelengths * 1e-4)
+    wavelength_in_cm: float | NDArray[np.float64],
+    reference_crosssection: float | NDArray[np.float64],
+    reference_frequency: float = REFERENCE_FREQUENCY_IN_HZ,
+) -> float | NDArray[np.float64]:
+    frequencies: float | NDArray[np.float64] = C_IN_CGS / wavelength_in_cm
 
-    return reference_crosssections * (frequencies / reference_frequency) ** 4
+    return reference_crosssection * (frequencies / reference_frequency) ** 4
