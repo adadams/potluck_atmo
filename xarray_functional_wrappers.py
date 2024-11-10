@@ -1,10 +1,16 @@
 from collections.abc import Callable, Sequence
-from functools import partial, reduce
+from dataclasses import dataclass, field
+from functools import partial, reduce, wraps
 from inspect import signature
-from typing import Protocol
+from typing import Any, NamedTuple, Protocol
 
-import numpy as np
 import xarray as xr
+
+from xarray_serialization import (
+    ArgumentDimensionType,
+    DimensionAnnotation,
+    XarrayDimension,
+)
 
 # NOTE to self: assess whether we can develop a version of these that uses xr.apply_ufunc;
 # maybe partialing apply_ufunc with everything except *args. Can we get away with this without kwargs?
@@ -27,6 +33,92 @@ class OperatesOnDataArray(Protocol):
 
 class OperatesOnDataset(Protocol):
     def __call__(self, dataset: xr.Dataset) -> xr.Dataset: ...
+
+
+"""
+Sketching out the structure of a FunctionDimensionType.
+a(
+  b(
+      c("wavelength", d(e("[length]", 1)e,)d )c,
+      c("pressure", d(e("[mass]", 1)e, e("[time]", -2)e, e("[length]", -1)e)d )c
+  )b,
+
+  b(
+      c("wavelength", d(e("[length]", 1)e,)d )c,
+  )b
+)a
+"""
+
+
+class NamesAndDimensionalities(NamedTuple):
+    dimension_names: XarrayDimension
+    dimensionalities: DimensionAnnotation
+
+
+def separate_argument_dimension_into_names_and_dimensions(
+    argument_dimension_type: ArgumentDimensionType,
+) -> NamesAndDimensionalities:
+    argument_dimensions: tuple[XarrayDimension] = tuple(
+        tuple([dimension_annotation[0] for dimension_annotation in argument_dimension])
+        for argument_dimension in argument_dimension_type
+    )
+
+    dimensionalities: tuple[DimensionAnnotation] = tuple(
+        tuple([dimension_annotation[1] for dimension_annotation in argument_dimension])
+        for argument_dimension in argument_dimension_type
+    )
+
+    return NamesAndDimensionalities(argument_dimensions, dimensionalities)
+
+
+@dataclass
+class Dimensionalize:
+    argument_dimensions: ArgumentDimensionType
+    result_dimensions: ArgumentDimensionType
+
+    _argument_dimension_names: XarrayDimension = field(init=False)
+    _argument_dimensionality: DimensionAnnotation = field(init=False)
+
+    _result_dimension_names: XarrayDimension = field(init=False)
+    _result_dimensionality: DimensionAnnotation = field(init=False)
+
+    def __post_init__(self):
+        self._argument_dimension_names, self._argument_dimensionality = (
+            separate_argument_dimension_into_names_and_dimensions(
+                self.argument_dimensions
+            )
+        )
+
+        self._result_dimension_names, self._result_dimensionality = (
+            separate_argument_dimension_into_names_and_dimensions(
+                self.result_dimensions
+            )
+        )
+
+        self.vectorizable: bool = True
+
+    def __call__(self, function: Callable[[Any], Any]):
+        @wraps(function)
+        def apply_ufunc_wrapper(*args, **kwargs):
+            return xr.apply_ufunc(
+                function,
+                *args,
+                kwargs=kwargs,
+                input_core_dims=self._argument_dimension_names,
+                output_core_dims=self._result_dimension_names,
+                vectorize=self.vectorizable,
+            )
+
+        return apply_ufunc_wrapper
+
+
+# TODO: can we use this to define our structural types? xarray datasets would be one
+#       possible implementation of the protocol. The types would describe the physical
+#       nature of the variables (e.g. do they represent pressure, temperature, wavelength, etc.),
+#       and potentially the shapes of the inputs vs. outputs. Not specific shapes, just for example
+#       whether the function preserves the shape of the input.
+
+# Below is some borrowing of xarray-specific functional code from a different project.
 
 
 def get_getter_from_dataset(variable_name: str) -> Callable[[xr.Dataset], xr.DataArray]:
@@ -96,25 +188,9 @@ def map_function_arguments_to_dataset_variables(
     )
 
 
-# TODO: given a dataset that contains named variables, that can be used as arguments to
-#       a function, map the variable names to the argument names (if different), then
-#       return a function that takes the dataset --------as a single argument.
-def map_to_xarray(
-    function: Callable[[xr.DataArray], xr.DataArray],
-) -> OperatesOnDataset: ...
+# Notekeeping on how to use apply_ufunc:
 
-
-# TODO: can we use this to define our structural types? xarray datasets would be one
-#       possible implementation of the protocol. The types would describe the physical
-#       nature of the variables (e.g. do they represent pressure, temperature, wavelength, etc.),
-#       and potentially the shapes of the inputs vs. outputs. Not specific shapes, just for example
-#       whether the function preserves the shape of the input.
-
-
-def wrap_ufunc(dataset: xr.Dataset, variable_name_mapping: dict[str, str]) -> Callable:
-    # map_function_arguments_to_dataset_variables -> function version that takes dataset as a single argument
-
-    """
+"""
     def squared_error(x, y):
         return (x - y) ** 2
 
@@ -205,9 +281,4 @@ def wrap_ufunc(dataset: xr.Dataset, variable_name_mapping: dict[str, str]) -> Ca
         output_core_dims=[[], []],
     )
 
-    """
-
-    def wrap_apply_ufunc(function: np.ufunc):
-        return
-
-    return
+"""

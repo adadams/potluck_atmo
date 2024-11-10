@@ -46,7 +46,7 @@ molecular_metadata_filepath: Path = (
     current_directory / "reference_data" / "gas_properties.toml"
 )
 
-molecular_metadata = {
+molecular_metadata: dict[str, MolecularCrossSectionMetadata] = {
     species: MolecularCrossSectionMetadata(**molecular_original_metadata)
     for species, molecular_original_metadata in msgspec.toml.decode(
         molecular_metadata_filepath.read_text()
@@ -123,8 +123,10 @@ if __name__ == "__main__":
     opacity_file_headers: tuple[CrossSectionTableHeader] = get_file_headers(
         opacity_filepaths
     )
+
     check_if_all_headers_match(opacity_file_headers)
-    fiducial_opacity_file_header: CrossSectionTableHeader = opacity_file_headers[0]
+    fiducial_opacity_file_header: CrossSectionTableHeader = opacity_file_headers[-1]
+    print(f"{fiducial_opacity_file_header=}")
 
     opacity_data: dict[str, np.ndarray] = load_crosssections_into_array(
         fiducial_opacity_file_header.number_of_pressure_layers,
@@ -134,15 +136,15 @@ if __name__ == "__main__":
     )
 
     log_pressures: np.ndarray = np.linspace(
-        opacity_file_headers[0].minimum_log_pressure,
-        opacity_file_headers[0].maximum_log_pressure,
-        opacity_file_headers[0].number_of_pressure_layers,
+        fiducial_opacity_file_header.minimum_log_pressure,
+        fiducial_opacity_file_header.maximum_log_pressure,
+        fiducial_opacity_file_header.number_of_pressure_layers,
     )
 
     log_temperatures: np.ndarray = np.linspace(
-        opacity_file_headers[0].minimum_log_temperature,
-        opacity_file_headers[0].maximum_log_temperature,
-        opacity_file_headers[0].number_of_temperatures,
+        fiducial_opacity_file_header.minimum_log_temperature,
+        fiducial_opacity_file_header.maximum_log_temperature,
+        fiducial_opacity_file_header.number_of_temperatures,
     )
 
     number_of_wavelengths: int = get_number_of_wavelengths(
@@ -166,24 +168,22 @@ if __name__ == "__main__":
         ),
     }
 
-species_dataarrays: dict[str, xr.DataArray] = {
-    species: xr.DataArray(
-        dims=tuple(shared_coordinates.keys()),
+    species_dataarrays: dict[str, xr.DataArray] = {
+        species: xr.DataArray(
+            dims=tuple(shared_coordinates.keys()),
+            coords=shared_coordinates,
+            data=crosssection_array,
+            attrs=msgspec.structs.asdict(molecular_metadata[species])
+            if species in molecular_metadata
+            else {},
+        )
+        for species, crosssection_array in opacity_data.items()
+    }
+
+    species_dataset: xr.Dataset = xr.Dataset(
+        data_vars=species_dataarrays,
         coords=shared_coordinates,
-        data=crosssection_array,
-        attrs=msgspec.structs.asdict(molecular_metadata[species])
-        if species in molecular_metadata
-        else {},
+        attrs={"opacity_catalog": opacity_catalog_name},
     )
-    for species, crosssection_array in opacity_data.items()
-}
 
-species_dataset: xr.Dataset = xr.Dataset(
-    data_vars=species_dataarrays,
-    coords=shared_coordinates,
-    attrs={"opacity_catalog": opacity_catalog_name},
-)
-
-species_dataset.to_netcdf(test_opacity_directory / f"{opacity_catalog_name}.nc")
-
-print(species_dataset)
+    species_dataset.to_netcdf(test_opacity_directory / f"{opacity_catalog_name}.nc")

@@ -35,6 +35,14 @@ PressureUnits: UnitType = (("[mass]", 1), ("[time]", -2), ("[length]", -1))
 WavelengthUnits: UnitType = (("[length]", 1),)
 # WavelengthData: TypeAlias = NDArray[Shape["number_of_wavelengths"], Float]  # noqa: F821
 
+DimensionAnnotation: TypeAlias = tuple[str, UnitType]
+
+WavelengthType: DimensionAnnotation = ("wavelength", WavelengthUnits)
+PressureType: DimensionAnnotation = ("pressure", PressureUnits)
+
+ArgumentDimensionType: TypeAlias = tuple[DimensionAnnotation]
+FunctionDimensionType: TypeAlias = tuple[ArgumentDimensionType]
+
 
 class QuantityAttrs(TypedDict):
     units: Required[str]
@@ -65,25 +73,6 @@ class XarrayDataset(msgspec.Struct):
     coords: dict[str, XarrayVariable]
     attrs: Optional[dict[str, str | float]]
 
-
-'''
-def enc_hook(obj: Any) -> Any:
-    """Given an object that msgspec doesn't know how to serialize by
-    default, convert it into an object that it does know how to
-    serialize"""
-    pass
-
-
-def dec_hook(type: Type, obj: Any) -> Any:
-    """Given a type in a schema, convert ``obj`` (composed of natively
-    supported objects) into an object of type ``type``.
-
-    Any `TypeError` or `ValueError` exceptions raised by this method will
-    be considered "user facing" and converted into a `ValidationError` with
-    additional context. All other exceptions will be raised directly.
-    """
-    pass
-'''
 
 """
 class PressureCoordinate(XarrayVariable):
