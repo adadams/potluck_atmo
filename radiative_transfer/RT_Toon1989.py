@@ -4,6 +4,8 @@ import numpy as np
 from numpy.typing import NDArray
 
 from basic_functional_tools import interleave
+from xarray_functional_wrappers import Dimensionalize
+from xarray_serialization import PressureType, WavelengthType
 
 c: Final[float] = 2.99792458e10  # in CGS
 hc: Final[float] = 1.98644568e-16  # in CGS
@@ -41,6 +43,16 @@ STREAM_WEIGHTS: Final[NDArray[np.float64]] = np.array(
 ###############################################################################
 ############################ Main callable function. ##########################
 ###############################################################################
+@Dimensionalize(
+    argument_dimensions=(
+        (WavelengthType,),
+        (PressureType,),
+        (PressureType, WavelengthType),
+        (PressureType, WavelengthType),
+        (PressureType, WavelengthType),
+    ),
+    result_dimensions=(WavelengthType,),
+)
 def RT_Toon1989(
     wavelengths_in_cm: NDArray[np.float64],  # (wavelength,)
     temperatures_in_K: NDArray[np.float64],  # (temperature,)
@@ -49,7 +61,7 @@ def RT_Toon1989(
     scattering_asymmetry: NDArray[np.float64],  # (layer, wavelength)
     stream_cosine_angles: NDArray[np.float64] = STREAM_COSINE_ANGLES,
     stream_weights: NDArray[np.float64] = STREAM_WEIGHTS,
-):
+) -> NDArray[np.float64]:
     thermal_intensity, delta_thermal_intensity = thermal_intensity_by_layer(
         temperatures_in_K, wavelengths_in_cm
     )

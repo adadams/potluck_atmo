@@ -5,7 +5,7 @@ from typing import TypedDict
 import msgspec
 import xarray as xr
 
-from material.material import crosssections_to_optical_depths
+from material.absorbing.from_crosssections import crosssections_to_optical_depths
 
 current_directory: Path = Path(__file__).parent
 
