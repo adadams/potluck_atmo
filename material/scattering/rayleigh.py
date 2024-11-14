@@ -1,9 +1,10 @@
 import numpy as np
+import xarray as xr
 from numpy.typing import NDArray
 
 from material.scattering.types import TwoStreamScatteringCoefficients
 from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import PressureType, SpeciesType, WavelengthType
+from xarray_serialization import PressureType, WavelengthType
 
 REFERENCE_FREQUENCY_IN_HZ: float = 5.0872638e14
 C_IN_CGS: float = 2.99792458e10
@@ -47,8 +48,8 @@ def calculate_rayleigh_scattering_crosssections(
     ),
     result_dimensions=(
         (
-            PressureType,
             WavelengthType,
+            PressureType,
         ),
     ),
 )
@@ -63,30 +64,22 @@ def calculate_rayleigh_scattering_attenuation_coefficients(
     return crosssections * (frequencies / reference_frequency) ** 4 * number_density
 
 
-@Dimensionalize(
-    argument_dimensions=(
-        (WavelengthType,),
-        (WavelengthType, PressureType, SpeciesType),
-        (PressureType, SpeciesType),
-    ),
-    result_dimensions=(
-        (WavelengthType, PressureType, SpeciesType),
-        (WavelengthType, PressureType, SpeciesType),
-    ),
-)
 def calculate_two_stream_components(
-    wavelengths_in_cm: float | NDArray[np.float64],
-    crosssections: float | NDArray[np.float64],
-    number_density: NDArray[np.float64],
+    wavelengths_in_cm: xr.DataArray,
+    crosssections: xr.DataArray,
+    number_density: xr.DataArray,
     reference_frequency: float = REFERENCE_FREQUENCY_IN_HZ,
 ) -> float | NDArray[np.float64]:
-    rayleigh_scattering_attenuation_coefficients: float | NDArray[np.float64] = (
-        calculate_rayleigh_scattering_attenuation_coefficients(
+    rayleigh_scattering_crosssections: xr.DataArray = (
+        calculate_rayleigh_scattering_crosssections(
             wavelengths_in_cm,
             crosssections,
-            number_density,
-            reference_frequency,
+            reference_frequency=reference_frequency,
         )
+    )
+
+    rayleigh_scattering_attenuation_coefficients: xr.DataArray = (
+        rayleigh_scattering_crosssections * number_density
     )
 
     forward_scattering_attentuation_coefficients: float | NDArray[np.float64] = (

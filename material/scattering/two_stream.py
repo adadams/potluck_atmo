@@ -14,7 +14,7 @@ from xarray_serialization import PressureType, WavelengthType
     ),
     result_dimensions=((WavelengthType, PressureType), (WavelengthType, PressureType)),
 )
-def calculate_twostream_scattering_parameters(
+def calculate_two_stream_scattering_parameters(
     forward_scattering_coefficients: NDArray[np.float64],
     backward_scattering_coefficients: NDArray[np.float64],
     absorption_coefficients: NDArray[np.float64],

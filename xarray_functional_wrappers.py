@@ -100,7 +100,6 @@ class Dimensionalize:
     def __call__(self, function: Callable[[Any], Any]):
         @wraps(function)
         def apply_ufunc_wrapper(*args, **kwargs):
-            print(f"{function} call {args=}, {kwargs=}")
             return xr.apply_ufunc(
                 function,
                 *args,
@@ -187,99 +186,3 @@ def map_function_arguments_to_dataset_variables(
     return partial(
         function_using_dataset, function=function, variable_mapping=variable_mapping
     )
-
-
-# Notekeeping on how to use apply_ufunc:
-
-"""
-    def squared_error(x, y):
-        return (x - y) ** 2
-
-    result = xr.apply_ufunc(squared_error, ds.air, 1)
-
-    def wrapper(x, y):
-        print(f"received x of type {type(x)}, shape {x.shape}")
-        print(f"received y of type {type(y)}")
-        return squared_error(x, y)
-
-    result = xr.apply_ufunc(wrapper, ds.air, 1, keep_attrs=True)
-
-    ds2 = ds.copy()
-    ds2["air2"] = ds2.air.isel(lon=0) ** 2
-
-    result = xr.apply_ufunc(wrapper, ds2, 1)
-    result = xr.apply_ufunc(squared_error, ds2, 1)
-
-    result = xr.apply_ufunc(squared_error, ds.air, kwargs={"y": 1})
-
-    result = xr.apply_ufunc(
-        # function to apply
-        np.mean,
-        # object with data to pass to function
-        ds,
-        # keyword arguments to pass to np.mean
-        kwargs={"axis": 0},
-    )
-
-    result = xr.apply_ufunc(
-        np.mean,
-        ds, # (time, lat, lon)
-        # specify core dimensions as a list of lists
-        # here 'time' is the core dimension on `ds`
-        input_core_dims=[
-            ["time"],  # core dimension for ds
-        ],
-        kwargs={"axis": 0},
-    )
-
-    # With apply_ufunc, core dimensions are recognized by name, and then moved to the last dimension of any input arguments before applying the given function. This means that for functions that accept an axis argument, you usually need to set axis=-1.
-    def wrapper(array, **kwargs):
-        print(f"received {type(array)} shape: {array.shape}, kwargs: {kwargs}")
-        result = np.mean(array, **kwargs)
-        print(f"result.shape: {result.shape}")
-        return result
-
-
-    result = xr.apply_ufunc(
-        wrapper,
-        ds,
-        input_core_dims=[["time"]],
-        kwargs={"axis": -1},
-    )
-
-    interp_result = np.interp(newlat, air.lat.data, air.data)
-
-    ### EITHER:
-
-    interp_result = xr.apply_ufunc(
-        np.interp,  # function to apply
-        newlat,  # 1st input to np.interp
-        air.lat,  # 2nd input to np.interp
-        air,  # 3rd input to np.interp
-        input_core_dims=[["lat_interp"], ["lat"], ["lat"]],  # one entry per function input, 3 in total!
-        output_core_dims=[["lat_interp"]],
-    )
-
-    ### OR:
-
-    interp_result = xr.apply_ufunc(
-        np.interp,  # first the function
-        newlat,
-        air.lat,
-        air,
-        input_core_dims=[["lat"], ["lat"], ["lat"]],
-        output_core_dims=[["lat"]],
-        exclude_dims={"lat"},
-    )
-
-    def minmax(array):
-        return array.min(axis=-1), array.max(axis=-1)
-
-    minmax_result = minda, maxda = xr.apply_ufunc(
-        minmax,
-        air2d,
-        input_core_dims=[["lat"]],
-        output_core_dims=[[], []],
-    )
-
-"""

@@ -9,7 +9,7 @@ from material.absorbing.from_crosssections import (
 )
 from material.scattering.rayleigh import calculate_two_stream_components
 from material.scattering.types import TwoStreamScatteringCoefficients
-from material.two_stream import compile_twostream_parameters
+from material.two_stream import compile_two_stream_parameters
 from material.types import TwoStreamParameters
 from radiative_transfer.RT_Toon1989 import RT_Toon1989, RTToon1989Inputs
 
@@ -50,17 +50,17 @@ def compile_RT_inputs(
         "species"
     )
 
-    twostream_parameters: TwoStreamParameters = compile_twostream_parameters(
-        forward_scattering_coefficients=cumulative_forward_scattering_coefficients,
-        backward_scattering_coefficients=cumulative_backward_scattering_coefficients,
-        absorption_coefficients=cumulative_absorption_coefficients,
-        path_length=path_length,
+    two_stream_parameters: TwoStreamParameters = compile_two_stream_parameters(
+        cumulative_forward_scattering_coefficients,
+        cumulative_backward_scattering_coefficients,
+        cumulative_absorption_coefficients,
+        path_length,
     )
 
     return RTToon1989Inputs(
         wavelengths_in_cm=wavelengths_in_cm,
         temperatures_in_K=temperatures_in_K,
-        **msgspec.structs.asdict(twostream_parameters),
+        **msgspec.structs.asdict(two_stream_parameters),
     )
 
 
@@ -93,18 +93,37 @@ if __name__ == "__main__":
         "vertical_structure"
     ].to_dataset()
 
+    test_path_length: xr.DataArray = -test_vertical_structure_dataset.altitude.diff(
+        "pressure"
+    )
+
+    midlayer_pressures: xr.DataArray = (
+        test_vertical_structure_dataset.pressure.to_numpy()[1:]
+        + test_vertical_structure_dataset.pressure.to_numpy()[:-1]
+    ) / 2
+
+    test_vertical_structure_dataset: xr.Dataset = (
+        test_vertical_structure_dataset.interp(pressure=midlayer_pressures)
+    )
+
+    test_path_length = test_path_length.assign_coords(
+        pressure=test_vertical_structure_dataset.pressure
+    )
+
     test_molecular_inputs_datatree: xr.DataTree = test_vertical_inputs_datatree[
         "molecular_inputs"
     ]
-    test_number_densities_dataset: xr.Dataset = test_molecular_inputs_datatree[
-        "number_densities"
-    ].to_dataset()
+    test_number_densities_dataset: xr.Dataset = (
+        test_molecular_inputs_datatree["number_densities"]
+        .to_dataset()
+        .interp(pressure=midlayer_pressures)
+    )
 
     crosssection_catalog_dataset_interpolated_to_model: xr.Dataset = (
         (
             crosssection_catalog_dataset.interp(
                 temperature=test_vertical_structure_dataset.temperature,
-                pressure=test_vertical_structure_dataset.pressure,
+                pressure=midlayer_pressures,
             )
         )
         .get(list(test_number_densities_dataset.data_vars))
@@ -121,8 +140,6 @@ if __name__ == "__main__":
         dim="species", name="number_density"
     )
 
-    test_path_length: xr.DataArray = test_vertical_structure_dataset.altitude
-
     RT_inputs: RTToon1989Inputs = compile_RT_inputs(
         wavelengths_in_cm=test_wavelengths,
         temperatures_in_K=test_temperatures,
@@ -130,3 +147,7 @@ if __name__ == "__main__":
         number_density=test_number_densities,
         path_length=test_path_length,
     )
+
+    emitted_flux: xr.DataArray = RT_Toon1989(*RT_inputs.values())
+
+    print(f"{emitted_flux=}")

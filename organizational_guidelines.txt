@@ -4,6 +4,8 @@
 
 - If it's a quantity or data structure that you might want to save and look at, use a serializable data structure (i.e. a msgspec struct). If it's a structure that is being passed around as inputs to an internal function, use a NamedTuple or TypedDict.
 
+- Non-xarray arguments passed to decorated functions should be keyword-only.
+
 - (unresolved) What kinds of functions do we have/want? Is there a hierarchy we can define?
     - Low level: "math/physics functions". They should take primitives and/or arrays and can (should) be decorated with Dimensionalize so that xarray structures can be passed to them (and be returned by them).
 

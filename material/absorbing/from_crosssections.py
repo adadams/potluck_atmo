@@ -20,8 +20,8 @@ def crosssections_to_attenutation_coefficients(
 
 
 @Dimensionalize(
-    argument_dimensions=((WavelengthType, SpeciesType, PressureType), (PressureType,)),
-    result_dimensions=((WavelengthType, SpeciesType, PressureType),),
+    argument_dimensions=((WavelengthType, PressureType), (PressureType,)),
+    result_dimensions=((WavelengthType, PressureType),),
 )
 def attenuation_coefficients_to_optical_depths(
     attenuation_coefficients: NDArray[np.float64], path_length: NDArray[np.float64]
