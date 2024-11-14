@@ -1,4 +1,4 @@
-from typing import Final, NamedTuple
+from typing import Final, NamedTuple, Optional, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -43,6 +43,16 @@ STREAM_WEIGHTS: Final[NDArray[np.float64]] = np.array(
 ###############################################################################
 ############################ Main callable function. ##########################
 ###############################################################################
+class RTToon1989Inputs(TypedDict):
+    wavelengths_in_cm: NDArray[np.float64]  # (wavelength,)
+    temperatures_in_K: NDArray[np.float64]  # (pressure,)
+    optical_depth: NDArray[np.float64]  # (pressure, wavelength)
+    single_scattering_albedo: NDArray[np.float64]  # (pressure, wavelength)
+    scattering_asymmetry_parameter: NDArray[np.float64]  # (pressure, wavelength)
+    stream_cosine_angles: Optional[NDArray[np.float64]] = STREAM_COSINE_ANGLES
+    stream_weights: Optional[NDArray[np.float64]] = STREAM_WEIGHTS
+
+
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthType,),
@@ -51,14 +61,14 @@ STREAM_WEIGHTS: Final[NDArray[np.float64]] = np.array(
         (PressureType, WavelengthType),
         (PressureType, WavelengthType),
     ),
-    result_dimensions=(WavelengthType,),
+    result_dimensions=((WavelengthType,),),
 )
 def RT_Toon1989(
-    wavelengths_in_cm: NDArray[np.float64],  # (wavelength,)
-    temperatures_in_K: NDArray[np.float64],  # (temperature,)
-    optical_depth_per_layer: NDArray[np.float64],  # (layer, wavelength)
-    single_scattering_albedo: NDArray[np.float64],  # (layer, wavelength)
-    scattering_asymmetry: NDArray[np.float64],  # (layer, wavelength)
+    wavelengths_in_cm: NDArray[np.float64],
+    temperatures_in_K: NDArray[np.float64],
+    optical_depth: NDArray[np.float64],
+    single_scattering_albedo: NDArray[np.float64],
+    scattering_asymmetry_parameter: NDArray[np.float64],
     stream_cosine_angles: NDArray[np.float64] = STREAM_COSINE_ANGLES,
     stream_weights: NDArray[np.float64] = STREAM_WEIGHTS,
 ) -> NDArray[np.float64]:
@@ -67,9 +77,9 @@ def RT_Toon1989(
     )
 
     terms_for_DSolver = calculate_terms_for_DSolver(
-        optical_depth_per_layer,
+        optical_depth,
         single_scattering_albedo,
-        scattering_asymmetry,
+        scattering_asymmetry_parameter,
         thermal_intensity,
         delta_thermal_intensity,
     )
@@ -79,9 +89,9 @@ def RT_Toon1989(
     xki_terms = DTRIDGL_subroutine(*terms_for_DTRIDGL)
 
     total_flux = calculate_flux(
-        optical_depth_per_layer,
+        optical_depth,
         single_scattering_albedo,
-        scattering_asymmetry,
+        scattering_asymmetry_parameter,
         thermal_intensity,
         delta_thermal_intensity,
         stream_cosine_angles,
@@ -135,19 +145,19 @@ class DsolverInputs(NamedTuple):
 
 def calculate_terms_for_DSolver(
     # size of array: (number_of_models, number_of_layers, number_of_wavelengths)
-    optical_depth_per_layer: NDArray[np.float64],
+    optical_depth: NDArray[np.float64],
     # size of array: (number_of_models, number_of_layers, number_of_wavelengths)
     single_scattering_albedo: NDArray[np.float64],
     # size of array: (number_of_models, number_of_layers, number_of_wavelengths)
-    scattering_asymmetry: NDArray[np.float64],
+    scattering_asymmetry_parameter: NDArray[np.float64],
     thermal_intensity: NDArray[np.float64],
     delta_thermal_intensity: NDArray[np.float64],
     mu_1: float = 0.5,  # This is mu_1 in Toon et al. 1989
 ):
-    number_of_wavelengths, number_of_layers = np.shape(optical_depth_per_layer)
-    tau = optical_depth_per_layer
+    number_of_wavelengths, number_of_layers = np.shape(optical_depth)
+    tau = optical_depth
     w0 = single_scattering_albedo
-    g = scattering_asymmetry
+    g = scattering_asymmetry_parameter
     tbfrac: float = 1  # INCOMPLETE IMPLEMENTATION
     # tbase = getT(hmin)       # INCOMPLETE IMPLEMENTATION
     thermal_intensity_at_TOA = thermal_intensity[0] - delta_thermal_intensity[0] / 2
@@ -293,9 +303,9 @@ def DTRIDGL_subroutine(afs, bfs, cfs, dfs):
 
 
 def calculate_flux(
-    optical_depth_per_layer: NDArray[np.float64],
+    optical_depth: NDArray[np.float64],
     single_scattering_albedo: NDArray[np.float64],
-    scattering_asymmetry: NDArray[np.float64],
+    scattering_asymmetry_parameter: NDArray[np.float64],
     thermal_intensity: NDArray[np.float64],
     delta_thermal_intensity: NDArray[np.float64],
     xki_terms: NDArray[np.float64],
@@ -303,9 +313,9 @@ def calculate_flux(
     stream_weights: NDArray[np.float64] = STREAM_WEIGHTS,
     mu_1: float = 0.5,  # This is mu_1 in Toon et al. 1989
 ) -> NDArray[np.float64]:
-    tau = optical_depth_per_layer
+    tau = optical_depth
     w0 = single_scattering_albedo
-    g = scattering_asymmetry
+    g = scattering_asymmetry_parameter
     thermal_intensity_at_base = thermal_intensity[-1] + delta_thermal_intensity[-1] / 2
 
     bsurf = thermal_intensity_at_base

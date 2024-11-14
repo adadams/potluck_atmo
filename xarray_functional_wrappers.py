@@ -100,6 +100,7 @@ class Dimensionalize:
     def __call__(self, function: Callable[[Any], Any]):
         @wraps(function)
         def apply_ufunc_wrapper(*args, **kwargs):
+            print(f"{function} call {args=}, {kwargs=}")
             return xr.apply_ufunc(
                 function,
                 *args,

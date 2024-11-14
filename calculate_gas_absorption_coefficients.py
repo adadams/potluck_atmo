@@ -4,7 +4,9 @@ from pathlib import Path
 import msgspec
 import xarray as xr
 
-from material.absorbing.from_crosssections import crosssections_to_optical_depths
+from material.absorbing.from_crosssections import (
+    crosssections_to_attenutation_coefficients,
+)
 
 current_directory: Path = Path(__file__).parent
 
@@ -88,17 +90,16 @@ if __name__ == "__main__":
         f"{check_number_density_dataset_has_valid_variables(test_number_densities_dataset)=}"
     )
 
-    gas_optical_depths = (
-        crosssections_to_optical_depths(
+    gas_absorption_coefficients = (
+        crosssections_to_attenutation_coefficients(
             crosssection_catalog_dataset_interpolated_to_model,
             test_number_densities_dataarray,
-            test_vertical_structure_dataset.altitude,
         )
-        .rename("gas_optical_depth")
-        .assign_attrs(units="dimensionless")
+        .rename("gas_absorption_coefficient")
+        .assign_attrs(units="cm^(-1)")
     )
 
-    gas_optical_depths.to_netcdf(
+    gas_absorption_coefficients.to_netcdf(
         test_data_structure_directory
-        / f"test_gas_optical_depths_{test_opacity_catalog}.nc"
+        / f"test_gas_absorption_coefficients_{test_opacity_catalog}.nc"
     )

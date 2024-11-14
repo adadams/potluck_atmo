@@ -1,0 +1,10 @@
+- Functions that work directly on physical values should take primitives or arrays and should be decorated with Dimensionalize.
+
+- Functions that don't work directly with physical calculations but compile them into seralizable data structures (i.e. msgspec structs) should...
+
+- If it's a quantity or data structure that you might want to save and look at, use a serializable data structure (i.e. a msgspec struct). If it's a structure that is being passed around as inputs to an internal function, use a NamedTuple or TypedDict.
+
+- (unresolved) What kinds of functions do we have/want? Is there a hierarchy we can define?
+    - Low level: "math/physics functions". They should take primitives and/or arrays and can (should) be decorated with Dimensionalize so that xarray structures can be passed to them (and be returned by them).
+
+    - High level: "script-y functions". These can take xarray structures directly, and call on low-level or mid-level functions. They should typically call low-levels when the call is expected to be computationally demanding.

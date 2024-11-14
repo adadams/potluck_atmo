@@ -5,3 +5,5 @@ syncthing*
 molecular_crosssections/reference_data/nir.nc
 test_inputs/test_data_structures/test_gas_optical_depths_nir.nc
 test_inputs/test_data_structures/test_rayleigh_crosssections.nc
+test_inputs/test_data_structures/test_gas_absorption_coefficients_nir.nc
+test_inputs/test_data_structures/test_rayleigh_crosssections_nir.nc

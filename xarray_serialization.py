@@ -35,10 +35,13 @@ PressureUnits: UnitType = (("[mass]", 1), ("[time]", -2), ("[length]", -1))
 WavelengthUnits: UnitType = (("[length]", 1),)
 # WavelengthData: TypeAlias = NDArray[Shape["number_of_wavelengths"], Float]  # noqa: F821
 
+DimensionlessUnits: UnitType = (("", 1),)
+
 DimensionAnnotation: TypeAlias = tuple[str, UnitType]
 
 WavelengthType: DimensionAnnotation = ("wavelength", WavelengthUnits)
 PressureType: DimensionAnnotation = ("pressure", PressureUnits)
+SpeciesType: DimensionAnnotation = ("species", DimensionlessUnits)
 
 ArgumentDimensionType: TypeAlias = tuple[DimensionAnnotation]
 FunctionDimensionType: TypeAlias = tuple[ArgumentDimensionType]
