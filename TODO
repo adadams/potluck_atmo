@@ -1,0 +1,4 @@
+
+Xarray structures:
+  ☐ Unit handling, not just dimensionality handling!
+  ☐ Some numpy functions will break the continuity of xarray apply_ufunc (for example, slicing), so we should think carefully about how our metadata could "recover" that information as well as possible.

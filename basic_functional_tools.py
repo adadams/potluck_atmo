@@ -18,7 +18,7 @@ def interleave(
         np.shape(first_terms)[interleaved_axis]
         + np.shape(second_terms)[interleaved_axis]
     )
-    interleaved_array_shape = np.shape(first_terms)
+    interleaved_array_shape = np.asarray(np.shape(first_terms))
     interleaved_array_shape[interleaved_axis] = interleaved_dimension_size
     interleaved_array = np.empty(interleaved_array_shape, dtype=first_terms.dtype)
 
@@ -32,7 +32,7 @@ def interleave(
     second_slices = base_slice_list
     second_slices[interleaved_axis] = second_slice
 
-    interleaved_array[first_slices] = first_terms
-    interleaved_array[second_slices] = second_terms
+    interleaved_array[*first_slices] = first_terms
+    interleaved_array[*second_slices] = second_terms
 
     return interleaved_array

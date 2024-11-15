@@ -7,10 +7,6 @@ from basic_functional_tools import interleave
 from xarray_functional_wrappers import Dimensionalize
 from xarray_serialization import PressureType, WavelengthType
 
-c: Final[float] = 2.99792458e10  # in CGS
-hc: Final[float] = 1.98644568e-16  # in CGS
-hc_over_k: Final[float] = 1.98644568 / 1.38064852
-
 MAXIMUM_EXP_FLOAT: Final[float] = 35
 
 STREAM_COSINE_ANGLES = np.array(
@@ -44,38 +40,34 @@ STREAM_WEIGHTS: Final[NDArray[np.float64]] = np.array(
 ############################ Main callable function. ##########################
 ###############################################################################
 class RTToon1989Inputs(TypedDict):
-    wavelengths_in_cm: NDArray[np.float64]  # (wavelength,)
-    temperatures_in_K: NDArray[np.float64]  # (pressure,)
-    optical_depth: NDArray[np.float64]  # (pressure, wavelength)
-    single_scattering_albedo: NDArray[np.float64]  # (pressure, wavelength)
+    thermal_intensity: NDArray[np.float64]  # (pressure, wavelength)
+    delta_thermal_intensity: NDArray[np.float64]  # (pressure, wavelength)
     scattering_asymmetry_parameter: NDArray[np.float64]  # (pressure, wavelength)
+    single_scattering_albedo: NDArray[np.float64]  # (pressure, wavelength)
+    optical_depth: NDArray[np.float64]  # (pressure, wavelength)
     stream_cosine_angles: Optional[NDArray[np.float64]] = STREAM_COSINE_ANGLES
     stream_weights: Optional[NDArray[np.float64]] = STREAM_WEIGHTS
 
 
 @Dimensionalize(
     argument_dimensions=(
-        (WavelengthType,),
-        (PressureType,),
-        (PressureType, WavelengthType),
-        (PressureType, WavelengthType),
-        (PressureType, WavelengthType),
+        (WavelengthType, PressureType),
+        (WavelengthType, PressureType),
+        (WavelengthType, PressureType),
+        (WavelengthType, PressureType),
+        (WavelengthType, PressureType),
     ),
     result_dimensions=((WavelengthType,),),
 )
 def RT_Toon1989(
-    wavelengths_in_cm: NDArray[np.float64],
-    temperatures_in_K: NDArray[np.float64],
-    optical_depth: NDArray[np.float64],
-    single_scattering_albedo: NDArray[np.float64],
+    thermal_intensity: NDArray[np.float64],
+    delta_thermal_intensity: NDArray[np.float64],
     scattering_asymmetry_parameter: NDArray[np.float64],
+    single_scattering_albedo: NDArray[np.float64],
+    optical_depth: NDArray[np.float64],
     stream_cosine_angles: NDArray[np.float64] = STREAM_COSINE_ANGLES,
     stream_weights: NDArray[np.float64] = STREAM_WEIGHTS,
 ) -> NDArray[np.float64]:
-    thermal_intensity, delta_thermal_intensity = thermal_intensity_by_layer(
-        temperatures_in_K, wavelengths_in_cm
-    )
-
     terms_for_DSolver = calculate_terms_for_DSolver(
         optical_depth,
         single_scattering_albedo,
@@ -94,41 +86,14 @@ def RT_Toon1989(
         scattering_asymmetry_parameter,
         thermal_intensity,
         delta_thermal_intensity,
+        xki_terms,
         stream_cosine_angles,
         stream_weights,
-        xki_terms,
     )
     return total_flux
 
 
 ###############################################################################
-
-
-def blackbody_intensity_by_wavelength(temperature_in_K, wavelength_in_cm):
-    T, wave = temperature_in_K, wavelength_in_cm
-    return (2 * hc * c / wave**5) / (np.exp(hc_over_k * (wave / T)) - 1)
-
-
-def thermal_intensity_by_layer(
-    temperatures_in_K: NDArray[np.float64], wavelengths_in_cm: NDArray[np.float64]
-):
-    wavelength_grid, temperature_grid = np.meshgrid(
-        wavelengths_in_cm, temperatures_in_K
-    )
-    thermal_intensity_bin_edges = blackbody_intensity_by_wavelength(
-        temperature_grid, wavelength_grid
-    )
-
-    # mean across each layer bin
-    thermal_intensity = (
-        thermal_intensity_bin_edges[:, :-1] + thermal_intensity_bin_edges[:, 1:]
-    ) / 2
-    # change across each layer bin
-    delta_thermal_intensity = (
-        thermal_intensity_bin_edges[:, 1:] - thermal_intensity_bin_edges[:, :-1]
-    )
-
-    return thermal_intensity, delta_thermal_intensity
 
 
 class DsolverInputs(NamedTuple):
@@ -160,8 +125,12 @@ def calculate_terms_for_DSolver(
     g = scattering_asymmetry_parameter
     tbfrac: float = 1  # INCOMPLETE IMPLEMENTATION
     # tbase = getT(hmin)       # INCOMPLETE IMPLEMENTATION
-    thermal_intensity_at_TOA = thermal_intensity[0] - delta_thermal_intensity[0] / 2
-    thermal_intensity_at_base = thermal_intensity[-1] + delta_thermal_intensity[-1] / 2
+    thermal_intensity_at_TOA = (
+        thermal_intensity[:, 0] - delta_thermal_intensity[:, 0] / 2
+    )
+    thermal_intensity_at_base = (
+        thermal_intensity[:, -1] + delta_thermal_intensity[:, -1] / 2
+    )
 
     alpha = np.sqrt(
         (1 - w0) / (1 - w0 * g)
@@ -205,60 +174,67 @@ def DSolver_subroutine(cp, cpm1, cm, cmm1, ep, btop, bottom, gama, rsf=0):
     # af, bd, cd, and df appear to be A_l, B_l, D_l, and E_l in Toon et al.
     # xk1 and xk2 appear to be Y_1n and Y_2n in Toon et al.
     # However, these do not match their formulae.
-    top_layer = [slice(None), slice(0)]
+    top_layer = [slice(None, None), slice(0, 1)]
     # bottom_layer = [slice(None), slice(-1)]
-    upper_edges = [slice(None), slice(None, -1)]
-    lower_edges = [slice(None), slice(1, None)]
+    upper_edges = [slice(None, None), slice(None, -1)]
+    lower_edges = [slice(None, None), slice(1, None)]
 
     e1 = ep + gama / ep
     e2 = ep - gama / ep
     e3 = gama * ep + 1 / ep
     e4 = gama * ep - 1 / ep
 
-    af_top = 0
-    bf_top = gama[top_layer] + 1
-    cf_top = gama[top_layer] - 1
-    df_top = btop - cmm1[top_layer]
+    gama_top_layer = gama[*top_layer]
+    af_top = np.zeros_like(gama_top_layer)
+    bf_top = gama_top_layer + 1
+    cf_top = gama_top_layer - 1
+    df_top = btop[:, np.newaxis] - cmm1[*top_layer]
 
     # odd indices
-    odd_afs = (e1[upper_edges] + e3[upper_edges]) * (
-        gama[lower_edges] - 1
+    odd_afs = (e1[*upper_edges] + e3[*upper_edges]) * (
+        gama[*lower_edges] - 1
     )  # (e1[nn]+e3[nn])*(gama[nn+1]-1.)
-    odd_bfs = (e2[upper_edges] + e4[upper_edges]) * (
-        gama[lower_edges] - 1
+    odd_bfs = (e2[*upper_edges] + e4[*upper_edges]) * (
+        gama[*lower_edges] - 1
     )  # e2[nn]+e4[nn])*(gama[nn+1]-1.)
-    odd_cfs = 2 * (1 - gama[lower_edges] ** 2)  # 2.*(1.-gama[nn+1]*gama[nn+1])
+    odd_cfs = 2 * (1 - gama[*lower_edges] ** 2)  # 2.*(1.-gama[nn+1]*gama[nn+1])
     odd_dfs = (
-        gama[lower_edges] - 1
+        gama[*lower_edges] - 1
     ) * (  # (gama[nn+1]-1.)*(cpm1[nn+1]-cp[nn]) + (1.-gama[nn+1])*(cm[nn]-cmm1[nn+1])
-        (cpm1[lower_edges] - cp[upper_edges]) + (cmm1[lower_edges] - cm[upper_edges])
+        (cpm1[*lower_edges] - cp[*upper_edges])
+        + (cmm1[*lower_edges] - cm[*upper_edges])
     )
 
     # even indices -- NOTE: even and odd have been switched from the
     # Fortran code and Toon et al. due to fencepost effects.
-    even_afs = 2 * (1 - gama[upper_edges] ** 2)  # 2.*(1.-gama[nn]*gama[nn])
-    even_bfs = (e1[upper_edges] - e3[upper_edges]) * (
-        gama[lower_edges] + 1
+    even_afs = 2 * (1 - gama[*upper_edges] ** 2)  # 2.*(1.-gama[nn]*gama[nn])
+    even_bfs = (e1[*upper_edges] - e3[*upper_edges]) * (
+        gama[*lower_edges] + 1
     )  # (e1[nn]-e3[nn])*(1.+gama[nn+1])
     even_cfs = odd_afs  # (e1[nn]+e3[nn])*(gama[nn+1]-1.)
-    even_dfs = e3[upper_edges] * (cpm1[lower_edges] - cp[upper_edges]) + e1[
-        upper_edges
+    even_dfs = e3[*upper_edges] * (cpm1[*lower_edges] - cp[*upper_edges]) + e1[
+        *upper_edges
     ] * (
-        cm[upper_edges] - cmm1[lower_edges]
+        cm[*upper_edges] - cmm1[*lower_edges]
     )  # e3[nn]*(cpm1[nn+1]-cp[nn]) + e1[nn]*(cm[nn]-cmm1[nn+1])
 
     af_base = e1[:, -1] - rsf * e3[:, -1]  # e1[nlayershort-1] - rsf*e3[nlayershort-1]
     bf_base = e2[:, -1] - rsf * e4[:, -1]  # e2[nlayershort-1] - rsf*e4[nlayershort-1]
-    cf_base = 0
+    cf_base = np.zeros_like(af_base)
     # note: original C++ version says bsurf, but was called with bottom
     df_base = (
         bottom - cp[:, -1] + rsf * cm[:, -1]
     )  # bottom - cp[nlayershort-1] + rsf*cm[nlayershort-1]
 
-    afs = np.stack([af_top, interleave(odd_afs, even_afs), af_base], axis=-1)
-    bfs = np.stack([bf_top, interleave(odd_bfs, even_bfs), bf_base], axis=-1)
-    cfs = np.stack([cf_top, interleave(odd_cfs, even_cfs), cf_base], axis=-1)
-    dfs = np.stack([df_top, interleave(odd_dfs, even_dfs), df_base], axis=-1)
+    interleaved_afs = interleave(odd_afs, even_afs)
+    interleaved_bfs = interleave(odd_bfs, even_bfs)
+    interleaved_cfs = interleave(odd_cfs, even_cfs)
+    interleaved_dfs = interleave(odd_dfs, even_dfs)
+
+    afs = np.concatenate([af_top, interleaved_afs, af_base[:, np.newaxis]], axis=-1)
+    bfs = np.concatenate([bf_top, interleaved_bfs, bf_base[:, np.newaxis]], axis=-1)
+    cfs = np.concatenate([cf_top, interleaved_cfs, cf_base[:, np.newaxis]], axis=-1)
+    dfs = np.concatenate([df_top, interleaved_dfs, df_base[:, np.newaxis]], axis=-1)
 
     return afs, bfs, cfs, dfs
 
@@ -269,32 +245,34 @@ def DSolver_subroutine(cp, cpm1, cm, cmm1, ep, btop, bottom, gama, rsf=0):
 def DTRIDGL_subroutine(afs, bfs, cfs, dfs):
     # DTRIDGL subroutine to compute the necessary xki array
     # This matches the algorithm in Toon et al.
-    af_base = afs[-1]
-    bf_base = bfs[-1]
-    df_base = dfs[-1]
+    af_base = afs[:, -1]
+    bf_base = bfs[:, -1]
+    df_base = dfs[:, -1]
 
     as_base = af_base / bf_base  # as[nl2-1] = af[nl2-1]/bf[nl2-1]
     ds_base = df_base / bf_base  # ds[nl2-1] = df[nl2-1]/bf[nl2-1]
 
     as_terms = np.empty_like(afs, dtype=np.float64)
-    as_terms[-1] = as_base
+    as_terms[:, -1] = as_base
     ds_terms = np.empty_like(afs, dtype=np.float64)
-    ds_terms[-1] = ds_base
+    ds_terms[:, -1] = ds_base
 
     twice_number_of_layers = np.shape(afs)[-1]
 
     for half_layer in reversed(range(twice_number_of_layers)):
-        xx = 1 / (bfs[half_layer] - cfs[half_layer] * as_terms[half_layer])
-        as_terms[half_layer - 1] = afs[half_layer] / xx
-        ds_terms[half_layer - 1] = (
-            dfs[half_layer] - cfs[half_layer] * ds_terms[half_layer]
+        xx = 1 / (bfs[:, half_layer] - cfs[:, half_layer] * as_terms[:, half_layer])
+        as_terms[:, half_layer - 1] = afs[:, half_layer] / xx
+        ds_terms[:, half_layer - 1] = (
+            dfs[:, half_layer] - cfs[:, half_layer] * ds_terms[:, half_layer]
         ) * xx
 
     xki_terms = np.empty_like(ds_terms)
     xki_terms[0] = ds_terms[0]
 
-    for half_layer, (as_term, ds_term) in enumerate(zip(as_terms[1:], ds_terms[1:])):
-        xki_terms[half_layer + 1] = ds_term - as_term * xki_terms[half_layer]
+    for half_layer, (as_term, ds_term) in enumerate(
+        zip(as_terms[:, 1:].T, ds_terms[:, 1:].T)
+    ):
+        xki_terms[:, half_layer + 1] = ds_term - as_term * xki_terms[:, half_layer]
 
     return xki_terms
 
@@ -316,7 +294,9 @@ def calculate_flux(
     tau = optical_depth
     w0 = single_scattering_albedo
     g = scattering_asymmetry_parameter
-    thermal_intensity_at_base = thermal_intensity[-1] + delta_thermal_intensity[-1] / 2
+    thermal_intensity_at_base = (
+        thermal_intensity[:, -1] + delta_thermal_intensity[:, -1] / 2
+    )
 
     bsurf = thermal_intensity_at_base
     number_of_layers = np.shape(tau)[-1]
@@ -324,8 +304,8 @@ def calculate_flux(
     # NOTE: there was a line in the original C++ for loop (index n3):
     # if(xk2[n3]!=0. && fabs(xk2[n3]/xk[2*n3] < 1.e-30)) xk2[n3] = 0.;
     # but note xk was only initialized, so all xk would be zero at this step?
-    even_xki_terms = xki_terms[0::2]
-    odd_xki_terms = xki_terms[1::2]
+    even_xki_terms = xki_terms[:, 0::2]
+    odd_xki_terms = xki_terms[:, 1::2]
     xk1_terms = even_xki_terms + odd_xki_terms
     xk2_terms = even_xki_terms - odd_xki_terms
 
@@ -359,25 +339,39 @@ def calculate_flux(
     em2_terms = np.exp(-tau / stream_cosine_angles)
     em3_terms = em1_terms * em2_terms
 
-    fpt_base = (
-        2 * np.pi * (bsurf + delta_thermal_intensity[:, -1] * stream_cosine_angles)
+    delta_thermal_intensity_by_angle: NDArray[np.float64] = (
+        delta_thermal_intensity * stream_cosine_angles
     )
-    fpt_terms = np.empty_like(delta_thermal_intensity, dtype=np.float64)
-    fpt_terms[-1] = fpt_base
 
-    for layer in reversed(range(number_of_layers)):
-        fpt_terms[:, layer - 1] = (
-            fpt_terms[:, layer] * em2_terms[:, layer]
-            + gg_terms[:, layer]
-            / (lamda[:, layer] * stream_cosine_angles - 1)
-            * (epp_terms[:, layer] * em2_terms[:, layer] - 1)
-            + hh_terms[:, layer]
-            / (lamda[:, layer] * stream_cosine_angles + 1)
-            * (1 - em3_terms[:, layer])
-            + alpha1[:, layer] * (1 - em2_terms[:, layer])
-            + alpha2[:, layer]
-            * (stream_cosine_angles * (em2_terms[:, layer] - 1) + tau[..., layer])
+    delta_thermal_intensity_by_angle_at_surface: NDArray[np.float64] = (
+        delta_thermal_intensity_by_angle[..., -1]
+    )
+
+    fpt_base = 2 * np.pi * (bsurf + delta_thermal_intensity_by_angle_at_surface)
+    fpt_terms = np.empty_like(delta_thermal_intensity_by_angle, dtype=np.float64)
+    fpt_terms[..., -1] = fpt_base
+
+    stream_cosine_angles_by_layer: NDArray[np.float64] = stream_cosine_angles[..., 0]
+    stream_weights_by_layer: NDArray[np.float64] = stream_weights[..., 0]
+
+    for layer in reversed(range(1, number_of_layers)):
+        fpt_terms[..., layer - 1] = (
+            fpt_terms[..., layer] * em2_terms[..., layer]
+            + gg_terms[..., layer]
+            / (lamda[..., layer] * stream_cosine_angles_by_layer - 1)
+            * (epp_terms[..., layer] * em2_terms[..., layer] - 1)
+            + hh_terms[..., layer]
+            / (lamda[..., layer] * stream_cosine_angles_by_layer + 1)
+            * (1 - em3_terms[..., layer])
+            + alpha1[..., layer] * (1 - em2_terms[..., layer])
+            + alpha2[..., layer]
+            * (
+                stream_cosine_angles_by_layer * (em2_terms[..., layer] - 1)
+                + tau[..., layer]
+            )
         )
 
-    total_flux = stream_weights * fpt_terms[..., ::-1]
+    fpt_at_top = fpt_terms[..., 0]
+
+    total_flux = np.sum(stream_weights_by_layer * fpt_at_top, axis=0)
     return total_flux

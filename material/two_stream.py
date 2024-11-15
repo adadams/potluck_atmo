@@ -1,8 +1,6 @@
 from typing import TypedDict
 
-import numpy as np
 import xarray as xr
-from numpy.typing import NDArray
 
 from material.absorbing.from_crosssections import (
     attenuation_coefficients_to_optical_depths,
@@ -34,7 +32,7 @@ def compile_two_stream_parameters(
         )
     )
 
-    optical_depth: NDArray[np.float64] = attenuation_coefficients_to_optical_depths(
+    optical_depth: xr.DataArray = attenuation_coefficients_to_optical_depths(
         absorption_coefficients, path_length
     )
 

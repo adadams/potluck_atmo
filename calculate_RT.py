@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Final
 
 import msgspec
+import numpy as np
 import xarray as xr
 
 from material.absorbing.from_crosssections import (
@@ -12,13 +13,15 @@ from material.scattering.types import TwoStreamScatteringCoefficients
 from material.two_stream import compile_two_stream_parameters
 from material.types import TwoStreamParameters
 from radiative_transfer.RT_Toon1989 import RT_Toon1989, RTToon1989Inputs
+from temperature.thermal_intensity import calculate_thermal_intensity_by_layer
 
 MICRONS_TO_CM: Final[float] = 1e-4
 
 
 def compile_RT_inputs(
     wavelengths_in_cm: xr.DataArray,  # (wavelength,)
-    temperatures_in_K: xr.DataArray,  # (pressure,)
+    thermal_intensity: xr.DataArray,  # (pressure, wavelength)
+    delta_thermal_intensity: xr.DataArray,  # (pressure, wavelength)
     crosssections: xr.DataArray,  # (species, wavelength, pressure)
     number_density: xr.DataArray,  # (species, pressure)
     path_length: xr.DataArray,  # (pressure,)
@@ -58,8 +61,8 @@ def compile_RT_inputs(
     )
 
     return RTToon1989Inputs(
-        wavelengths_in_cm=wavelengths_in_cm,
-        temperatures_in_K=temperatures_in_K,
+        thermal_intensity=thermal_intensity,
+        delta_thermal_intensity=delta_thermal_intensity,
         **msgspec.structs.asdict(two_stream_parameters),
     )
 
@@ -97,6 +100,8 @@ if __name__ == "__main__":
         "pressure"
     )
 
+    temperatures_by_level: xr.DataArray = test_vertical_structure_dataset.temperature
+
     midlayer_pressures: xr.DataArray = (
         test_vertical_structure_dataset.pressure.to_numpy()[1:]
         + test_vertical_structure_dataset.pressure.to_numpy()[:-1]
@@ -132,7 +137,33 @@ if __name__ == "__main__":
 
     test_wavelengths: xr.DataArray = (
         crosssection_catalog_dataset_interpolated_to_model.wavelength
-    ) * MICRONS_TO_CM
+    )
+
+    test_wavelengths_in_cm: xr.DataArray = test_wavelengths * MICRONS_TO_CM
+
+    wavelength_grid, temperature_grid = np.meshgrid(
+        temperatures_by_level, test_wavelengths
+    )
+
+    test_thermal_intensity, test_delta_thermal_intensity = (
+        calculate_thermal_intensity_by_layer(wavelength_grid, temperature_grid)
+    )
+
+    test_thermal_intensity = xr.DataArray(
+        data=test_thermal_intensity,
+        dims=["wavelength", "pressure"],
+        coords={"pressure": midlayer_pressures, "wavelength": test_wavelengths},
+        name="thermal_intensity",
+        attrs={"units": "erg s^-1 cm^-3 sr^-1"},
+    )
+
+    test_delta_thermal_intensity = xr.DataArray(
+        data=test_delta_thermal_intensity,
+        dims=["wavelength", "pressure"],
+        coords={"pressure": midlayer_pressures, "wavelength": test_wavelengths},
+        name="delta_thermal_intensity",
+        attrs={"units": "erg s^-1 cm^-3 sr^-1"},
+    )
 
     test_temperatures: xr.DataArray = test_vertical_structure_dataset.temperature
 
@@ -141,8 +172,9 @@ if __name__ == "__main__":
     )
 
     RT_inputs: RTToon1989Inputs = compile_RT_inputs(
-        wavelengths_in_cm=test_wavelengths,
-        temperatures_in_K=test_temperatures,
+        wavelengths_in_cm=test_wavelengths_in_cm,
+        thermal_intensity=test_thermal_intensity,
+        delta_thermal_intensity=test_delta_thermal_intensity,
         crosssections=crosssection_catalog_dataset_interpolated_to_model,
         number_density=test_number_densities,
         path_length=test_path_length,
