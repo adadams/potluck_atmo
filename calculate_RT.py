@@ -141,8 +141,8 @@ if __name__ == "__main__":
 
     test_wavelengths_in_cm: xr.DataArray = test_wavelengths * MICRONS_TO_CM
 
-    wavelength_grid, temperature_grid = np.meshgrid(
-        temperatures_by_level, test_wavelengths
+    temperature_grid, wavelength_grid = np.meshgrid(
+        temperatures_by_level, test_wavelengths_in_cm
     )
 
     test_thermal_intensity, test_delta_thermal_intensity = (
@@ -155,6 +155,10 @@ if __name__ == "__main__":
         coords={"pressure": midlayer_pressures, "wavelength": test_wavelengths},
         name="thermal_intensity",
         attrs={"units": "erg s^-1 cm^-3 sr^-1"},
+    )
+    test_thermal_intensity.to_netcdf(
+        test_data_structure_directory
+        / f"test_thermal_intensity_{test_opacity_catalog}.nc"
     )
 
     test_delta_thermal_intensity = xr.DataArray(
@@ -180,6 +184,23 @@ if __name__ == "__main__":
         path_length=test_path_length,
     )
 
-    emitted_flux: xr.DataArray = RT_Toon1989(*RT_inputs.values())
+    RT_inputs["optical_depth"].to_netcdf(
+        test_data_structure_directory / "test_RT_inputs_optical_depth.nc"
+    )
 
-    print(f"{emitted_flux=}")
+    RT_inputs["scattering_asymmetry_parameter"].to_netcdf(
+        test_data_structure_directory
+        / "test_RT_inputs_scattering_asymmetry_parameter.nc"
+    )
+
+    RT_inputs["single_scattering_albedo"].to_netcdf(
+        test_data_structure_directory / "test_RT_inputs_single_scattering_albedo.nc"
+    )
+
+    emitted_flux: xr.DataArray = (
+        RT_Toon1989(*RT_inputs.values())
+        .rename("emitted_flux")
+        .assign_attrs(units="erg cm^-2 s^-1 sr^-1")
+    )
+
+    emitted_flux.to_netcdf(test_data_structure_directory / "test_emitted_flux.nc")

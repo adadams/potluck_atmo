@@ -16,7 +16,7 @@ def blackbody_intensity_by_wavelength(
     temperature_in_K: float | NDArray[np.float64],
 ):
     return (2 * hc * c / wavelength_in_cm**5) / (
-        np.exp(hc_over_k * (wavelength_in_cm / temperature_in_K)) - 1
+        np.exp(hc_over_k / (wavelength_in_cm * temperature_in_K)) - 1
     )
 
 
@@ -37,7 +37,7 @@ def calculate_thermal_intensity_by_layer(
     temperature_grid_in_K: NDArray[np.float64],
 ):
     thermal_intensity_bin_edges = blackbody_intensity_by_wavelength(
-        temperature_grid_in_K, wavelength_grid_in_cm
+        wavelength_grid_in_cm, temperature_grid_in_K
     )
 
     # mean across each layer bin

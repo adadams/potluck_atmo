@@ -25,11 +25,11 @@ def interleave(
     base_slice_list = [slice(None)] * first_terms.ndim
 
     first_slice = slice(0, None, 2)
-    first_slices = base_slice_list
+    first_slices = base_slice_list.copy()
     first_slices[interleaved_axis] = first_slice
 
     second_slice = slice(1, None, 2)
-    second_slices = base_slice_list
+    second_slices = base_slice_list.copy()
     second_slices[interleaved_axis] = second_slice
 
     interleaved_array[*first_slices] = first_terms

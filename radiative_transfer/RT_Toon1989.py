@@ -261,7 +261,7 @@ def DTRIDGL_subroutine(afs, bfs, cfs, dfs):
 
     for half_layer in reversed(range(twice_number_of_layers)):
         xx = 1 / (bfs[:, half_layer] - cfs[:, half_layer] * as_terms[:, half_layer])
-        as_terms[:, half_layer - 1] = afs[:, half_layer] / xx
+        as_terms[:, half_layer - 1] = afs[:, half_layer] * xx
         ds_terms[:, half_layer - 1] = (
             dfs[:, half_layer] - cfs[:, half_layer] * ds_terms[:, half_layer]
         ) * xx
