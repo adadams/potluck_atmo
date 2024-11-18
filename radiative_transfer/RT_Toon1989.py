@@ -7,9 +7,9 @@ from basic_functional_tools import interleave
 from xarray_functional_wrappers import Dimensionalize
 from xarray_serialization import PressureType, WavelengthType
 
-MAXIMUM_EXP_FLOAT: Final[float] = 35
+MAXIMUM_EXP_FLOAT: Final[float] = 35.0
 
-STREAM_COSINE_ANGLES = np.array(
+STREAM_COSINE_ANGLES: Final[NDArray[np.float64]] = np.array(
     [
         0.0446339553,
         0.1443662570,
@@ -34,6 +34,11 @@ STREAM_WEIGHTS: Final[NDArray[np.float64]] = np.array(
         0.0445508044,
     ]
 )
+
+bottom_layer: list[slice] = [slice(None, None), slice(-1, None)]
+top_layer: list[slice] = [slice(None), slice(0, 1)]
+upper_edges: list[slice] = [slice(None, None), slice(1, None)]
+lower_edges: list[slice] = [slice(None, None), slice(None, -1)]
 
 
 ###############################################################################
@@ -126,10 +131,10 @@ def calculate_terms_for_DSolver(
     tbfrac: float = 1  # INCOMPLETE IMPLEMENTATION
     # tbase = getT(hmin)       # INCOMPLETE IMPLEMENTATION
     thermal_intensity_at_TOA = (
-        thermal_intensity[:, 0] - delta_thermal_intensity[:, 0] / 2
+        thermal_intensity[*top_layer] - delta_thermal_intensity[*top_layer] / 2
     )
     thermal_intensity_at_base = (
-        thermal_intensity[:, -1] + delta_thermal_intensity[:, -1] / 2
+        thermal_intensity[*bottom_layer] + delta_thermal_intensity[*bottom_layer] / 2
     )
 
     alpha = np.sqrt(
@@ -150,12 +155,12 @@ def calculate_terms_for_DSolver(
     lamda_x_tau = np.clip(lamda * tau, a_min=None, a_max=MAXIMUM_EXP_FLOAT)
     ep = np.exp(lamda_x_tau)
 
-    tautop = tau[:, 0]
+    tautop = tau[*top_layer]
     btop = (
         (1 - np.exp(-tautop / mu_1)) * thermal_intensity_at_TOA
     )  # (1. - exp(-tautop/mu_1))*blackbodyL(tprof[0],wavelength)
-    bsurf = thermal_intensity_at_base  # blackbodyL(tbase,wavelength)
-    bottom = bsurf + delta_thermal_intensity[:, -1] * (
+    # bsurf = thermal_intensity_at_base  # blackbodyL(tbase,wavelength)
+    bottom = thermal_intensity_at_base + delta_thermal_intensity[*bottom_layer] * (
         mu_1 / tbfrac
     )  # Equivalent to multiplying taulayer by tbfrac.
 
@@ -174,10 +179,6 @@ def DSolver_subroutine(cp, cpm1, cm, cmm1, ep, btop, bottom, gama, rsf=0):
     # af, bd, cd, and df appear to be A_l, B_l, D_l, and E_l in Toon et al.
     # xk1 and xk2 appear to be Y_1n and Y_2n in Toon et al.
     # However, these do not match their formulae.
-    top_layer = [slice(None, None), slice(0, 1)]
-    # bottom_layer = [slice(None), slice(-1)]
-    upper_edges = [slice(None, None), slice(None, -1)]
-    lower_edges = [slice(None, None), slice(1, None)]
 
     e1 = ep + gama / ep
     e2 = ep - gama / ep
@@ -188,7 +189,7 @@ def DSolver_subroutine(cp, cpm1, cm, cmm1, ep, btop, bottom, gama, rsf=0):
     af_top = np.zeros_like(gama_top_layer)
     bf_top = gama_top_layer + 1
     cf_top = gama_top_layer - 1
-    df_top = btop[:, np.newaxis] - cmm1[*top_layer]
+    df_top = btop - cmm1[*top_layer]
 
     # odd indices
     odd_afs = (e1[*upper_edges] + e3[*upper_edges]) * (
@@ -218,12 +219,16 @@ def DSolver_subroutine(cp, cpm1, cm, cmm1, ep, btop, bottom, gama, rsf=0):
         cm[*upper_edges] - cmm1[*lower_edges]
     )  # e3[nn]*(cpm1[nn+1]-cp[nn]) + e1[nn]*(cm[nn]-cmm1[nn+1])
 
-    af_base = e1[:, -1] - rsf * e3[:, -1]  # e1[nlayershort-1] - rsf*e3[nlayershort-1]
-    bf_base = e2[:, -1] - rsf * e4[:, -1]  # e2[nlayershort-1] - rsf*e4[nlayershort-1]
+    af_base = (
+        e1[*bottom_layer] - rsf * e3[*bottom_layer]
+    )  # e1[nlayershort-1] - rsf*e3[nlayershort-1]
+    bf_base = (
+        e2[*bottom_layer] - rsf * e4[*bottom_layer]
+    )  # e2[nlayershort-1] - rsf*e4[nlayershort-1]
     cf_base = np.zeros_like(af_base)
     # note: original C++ version says bsurf, but was called with bottom
     df_base = (
-        bottom - cp[:, -1] + rsf * cm[:, -1]
+        bottom - cp[*bottom_layer] + rsf * cm[*bottom_layer]
     )  # bottom - cp[nlayershort-1] + rsf*cm[nlayershort-1]
 
     interleaved_afs = interleave(odd_afs, even_afs)
@@ -231,10 +236,10 @@ def DSolver_subroutine(cp, cpm1, cm, cmm1, ep, btop, bottom, gama, rsf=0):
     interleaved_cfs = interleave(odd_cfs, even_cfs)
     interleaved_dfs = interleave(odd_dfs, even_dfs)
 
-    afs = np.concatenate([af_top, interleaved_afs, af_base[:, np.newaxis]], axis=-1)
-    bfs = np.concatenate([bf_top, interleaved_bfs, bf_base[:, np.newaxis]], axis=-1)
-    cfs = np.concatenate([cf_top, interleaved_cfs, cf_base[:, np.newaxis]], axis=-1)
-    dfs = np.concatenate([df_top, interleaved_dfs, df_base[:, np.newaxis]], axis=-1)
+    afs = np.concatenate([af_top, interleaved_afs, af_base], axis=-1)
+    bfs = np.concatenate([bf_top, interleaved_bfs, bf_base], axis=-1)
+    cfs = np.concatenate([cf_top, interleaved_cfs, cf_base], axis=-1)
+    dfs = np.concatenate([df_top, interleaved_dfs, df_base], axis=-1)
 
     return afs, bfs, cfs, dfs
 
@@ -245,17 +250,17 @@ def DSolver_subroutine(cp, cpm1, cm, cmm1, ep, btop, bottom, gama, rsf=0):
 def DTRIDGL_subroutine(afs, bfs, cfs, dfs):
     # DTRIDGL subroutine to compute the necessary xki array
     # This matches the algorithm in Toon et al.
-    af_base = afs[:, -1]
-    bf_base = bfs[:, -1]
-    df_base = dfs[:, -1]
+    af_base = afs[*bottom_layer]
+    bf_base = bfs[*bottom_layer]
+    df_base = dfs[*bottom_layer]
 
     as_base = af_base / bf_base  # as[nl2-1] = af[nl2-1]/bf[nl2-1]
     ds_base = df_base / bf_base  # ds[nl2-1] = df[nl2-1]/bf[nl2-1]
 
     as_terms = np.empty_like(afs, dtype=np.float64)
-    as_terms[:, -1] = as_base
+    as_terms[*bottom_layer] = as_base
     ds_terms = np.empty_like(afs, dtype=np.float64)
-    ds_terms[:, -1] = ds_base
+    ds_terms[*bottom_layer] = ds_base
 
     twice_number_of_layers = np.shape(afs)[-1]
 
@@ -270,7 +275,7 @@ def DTRIDGL_subroutine(afs, bfs, cfs, dfs):
     xki_terms[0] = ds_terms[0]
 
     for half_layer, (as_term, ds_term) in enumerate(
-        zip(as_terms[:, 1:].T, ds_terms[:, 1:].T)
+        zip(as_terms[*upper_edges].T, ds_terms[*upper_edges].T)
     ):
         xki_terms[:, half_layer + 1] = ds_term - as_term * xki_terms[:, half_layer]
 
@@ -295,10 +300,10 @@ def calculate_flux(
     w0 = single_scattering_albedo
     g = scattering_asymmetry_parameter
     thermal_intensity_at_base = (
-        thermal_intensity[:, -1] + delta_thermal_intensity[:, -1] / 2
+        thermal_intensity[*bottom_layer] + delta_thermal_intensity[*bottom_layer] / 2
     )
 
-    bsurf = thermal_intensity_at_base
+    # bsurf = thermal_intensity_at_base
     number_of_layers = np.shape(tau)[-1]
 
     # NOTE: there was a line in the original C++ for loop (index n3):
@@ -343,11 +348,18 @@ def calculate_flux(
         delta_thermal_intensity * stream_cosine_angles
     )
 
-    delta_thermal_intensity_by_angle_at_surface: NDArray[np.float64] = (
+    delta_thermal_intensity_by_angle_at_base: NDArray[np.float64] = (
         delta_thermal_intensity_by_angle[..., -1]
     )
 
-    fpt_base = 2 * np.pi * (bsurf + delta_thermal_intensity_by_angle_at_surface)
+    fpt_base = (
+        2
+        * np.pi
+        * (
+            thermal_intensity_at_base.squeeze()
+            + delta_thermal_intensity_by_angle_at_base
+        )
+    )
     fpt_terms = np.empty_like(delta_thermal_intensity_by_angle, dtype=np.float64)
     fpt_terms[..., -1] = fpt_base
 

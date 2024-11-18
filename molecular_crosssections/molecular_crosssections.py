@@ -97,7 +97,7 @@ def load_crosssections_into_array(
         )
 
     return {
-        species: load_array(filepath)
+        species: load_array(filepath)[:, :, ::-1]
         for species, filepath in filepaths.items()
         if species not in excluded_species
     }
@@ -111,7 +111,10 @@ if __name__ == "__main__":
         research_data_storage_directory / "Opacities_0v10" / "gases"
     )
 
-    opacity_catalog_name: str = "nir"
+    if not Path.exists(test_opacity_directory):
+        raise ValueError(f"Directory {test_opacity_directory} does not exist.")
+
+    opacity_catalog_name: str = "jwst50k"
 
     opacity_filepaths: dict[str, Path] = {
         filepath[filepath.rfind("/") + 1 : filepath.index(".")]: Path(filepath)
@@ -154,7 +157,7 @@ if __name__ == "__main__":
     )
     wavelengths: np.ndarray = get_wavelengths_from_number_of_elements_and_resolution(
         fiducial_opacity_file_header.minimum_wavelength,
-        number_of_wavelengths,
+        number_of_wavelengths - 1,
         fiducial_opacity_file_header.effective_resolution,
     )
 

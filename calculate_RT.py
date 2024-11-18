@@ -4,6 +4,8 @@ from typing import Final
 import msgspec
 import numpy as np
 import xarray as xr
+from matplotlib import pyplot as plt
+from spectres import spectres
 
 from material.absorbing.from_crosssections import (
     crosssections_to_attenutation_coefficients,
@@ -12,9 +14,11 @@ from material.scattering.rayleigh import calculate_two_stream_components
 from material.scattering.types import TwoStreamScatteringCoefficients
 from material.two_stream import compile_two_stream_parameters
 from material.types import TwoStreamParameters
+from radiative_transfer.RT_one_stream import calculate_spectral_intensity_at_surface
 from radiative_transfer.RT_Toon1989 import RT_Toon1989, RTToon1989Inputs
 from temperature.thermal_intensity import calculate_thermal_intensity_by_layer
 
+PARSEC_TO_CM: Final[float] = 3.08567758128e18
 MICRONS_TO_CM: Final[float] = 1e-4
 
 
@@ -49,8 +53,11 @@ def compile_RT_inputs(
     absorption_coefficients: xr.Dataset = crosssections_to_attenutation_coefficients(
         crosssections, number_density
     )
-    cumulative_absorption_coefficients: xr.DataArray = absorption_coefficients.sum(
-        "species"
+
+    cumulative_absorption_coefficients: xr.DataArray = (
+        absorption_coefficients.sum("species")
+        + cumulative_forward_scattering_coefficients
+        + cumulative_backward_scattering_coefficients
     )
 
     two_stream_parameters: TwoStreamParameters = compile_two_stream_parameters(
@@ -68,21 +75,37 @@ def compile_RT_inputs(
 
 
 if __name__ == "__main__":
-    test_opacity_catalog: str = "nir"
+    test_opacity_catalog: str = "jwst50k"
     test_species: str = "H2O"
 
     current_directory: Path = Path(__file__).parent
     opacity_data_directory: Path = (
-        current_directory / "molecular_crosssections" / "reference_data"
+        Path(
+            "/Volumes"
+            # current_directory / "molecular_crosssections" / "reference_data"
+        )
+        / "ResearchStorage"
+        / "Opacities_0v10"
+        / "gases"
     )
 
     catalog_filepath: Path = opacity_data_directory / f"{test_opacity_catalog}.nc"
 
     crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(catalog_filepath)
 
+    crosssection_catalog_dataset["wavelength"] = crosssection_catalog_dataset.wavelength
+
     test_data_structure_directory: Path = (
         current_directory / "test_inputs" / "test_data_structures"
     )
+
+    test_data_filepath: Path = (
+        test_data_structure_directory / "2M2236b_NIRSpec_G395H_R500_APOLLO.nc"
+    )
+
+    test_data: xr.Dataset = xr.open_dataset(test_data_filepath)
+
+    test_data_wavelengths: xr.DataArray = test_data.wavelength
 
     test_vertical_structure_dataset_path: Path = (
         test_data_structure_directory / "test_vertical_structure.nc"
@@ -95,6 +118,12 @@ if __name__ == "__main__":
     test_vertical_structure_dataset: xr.Dataset = test_vertical_inputs_datatree[
         "vertical_structure"
     ].to_dataset()
+
+    test_planet_radius_in_cm: float = test_vertical_structure_dataset.attrs[
+        "planet_radius_in_cm"
+    ]
+
+    test_distance_in_cm: float = 63.0 * PARSEC_TO_CM
 
     test_path_length: xr.DataArray = -test_vertical_structure_dataset.altitude.diff(
         "pressure"
@@ -200,7 +229,82 @@ if __name__ == "__main__":
     emitted_flux: xr.DataArray = (
         RT_Toon1989(*RT_inputs.values())
         .rename("emitted_flux")
-        .assign_attrs(units="erg cm^-2 s^-1 sr^-1")
+        .assign_attrs(units="erg s^-1 cm^-3")
     )
 
     emitted_flux.to_netcdf(test_data_structure_directory / "test_emitted_flux.nc")
+
+    cumulative_optical_depth: xr.DataArray = (
+        RT_inputs["optical_depth"].cumulative("pressure").sum()
+    )
+
+    emitted_onestream_flux: xr.DataArray = (
+        calculate_spectral_intensity_at_surface(
+            test_thermal_intensity,
+            cumulative_optical_depth,
+        )
+        .rename("emitted_flux")
+        .assign_attrs(units="erg s^-1 cm^-3")
+    )
+
+    observed_onestream_flux: xr.DataArray = (
+        emitted_onestream_flux
+        * np.pi
+        * (test_planet_radius_in_cm / test_distance_in_cm) ** 2
+    ).rename("observed_flux")
+
+    observed_twostream_flux: xr.DataArray = (
+        emitted_flux * (test_planet_radius_in_cm / test_distance_in_cm) ** 2
+    )
+
+    resampled_onestream_flux: xr.DataArray = xr.apply_ufunc(
+        spectres,
+        test_data_wavelengths,
+        observed_onestream_flux.wavelength,
+        observed_onestream_flux,
+        input_core_dims=[["wavelength"], ["wavelength"], ["wavelength"]],
+        output_core_dims=[["wavelength"]],
+        exclude_dims=set(("wavelength",)),
+        keep_attrs=True,
+    ).assign_coords(wavelength=test_data_wavelengths)
+
+    resampled_twostream_flux: xr.DataArray = xr.apply_ufunc(
+        spectres,
+        test_data_wavelengths,
+        observed_twostream_flux.wavelength,
+        observed_twostream_flux,
+        input_core_dims=[["wavelength"], ["wavelength"], ["wavelength"]],
+        output_core_dims=[["wavelength"]],
+        exclude_dims=set(("wavelength",)),
+        keep_attrs=True,
+    )
+
+    test_apollo_model_spectrum_filepath: Path = (
+        current_directory
+        / "test_inputs"
+        / (
+            "2M2236.Piette.G395H.cloud-free.2024-02-27.continuation.retrieved.Spectrum.binned.dat"
+        )
+    )
+
+    test_apollo_model_spectral_output = np.loadtxt(
+        test_apollo_model_spectrum_filepath
+    ).T
+    tamso_wavelo, tamso_wavehi, tamso_flux, *_ = test_apollo_model_spectral_output
+    tamso_wave = (tamso_wavelo + tamso_wavehi) / 2
+
+    plt.plot(test_data_wavelengths, resampled_onestream_flux, label="onestream")
+    plt.plot(test_data_wavelengths, test_data.flux_lambda, label="test 2M2236b data")
+    plt.plot(test_data_wavelengths, resampled_twostream_flux, label="twostream")
+    plt.plot(tamso_wave, tamso_flux, label="apollo model")
+    plt.savefig(
+        test_data_structure_directory / "test_RT_comparison.pdf", bbox_inches="tight"
+    )
+
+    resampled_onestream_flux.to_netcdf(
+        test_data_structure_directory / "test_observed_onestream_flux.nc"
+    )
+
+    resampled_twostream_flux.to_netcdf(
+        test_data_structure_directory / "test_observed_twostream_flux.nc"
+    )
