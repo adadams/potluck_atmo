@@ -1,16 +1,3 @@
-"""
-wavelengths = wavelengths in cm
-
-double sinmu = sqrt(1.-cosmu*cosmu);
-
-double tmid = 0.5*(tprof[j+1] + tprof[j]);
-double I0 = blackbodyL(tmid,wavelength);             // erg/s/sr/cm^2/Hz
-double dflux = I0 * (1.-exp(-taulayerlo[i][j]/cosmu)); // source function
-if(j>0) dflux *= exp(-tauproflo[i][j-1]/cosmu);        // absorption above layer
-dflux *= sinmu;                                      // multiply by area
-fluxes[i] += dflux;
-"""
-
 from typing import Final
 
 import numpy as np

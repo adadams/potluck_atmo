@@ -114,17 +114,13 @@ class DsolverInputs(NamedTuple):
 
 
 def calculate_terms_for_DSolver(
-    # size of array: (number_of_models, number_of_layers, number_of_wavelengths)
     optical_depth: NDArray[np.float64],
-    # size of array: (number_of_models, number_of_layers, number_of_wavelengths)
     single_scattering_albedo: NDArray[np.float64],
-    # size of array: (number_of_models, number_of_layers, number_of_wavelengths)
     scattering_asymmetry_parameter: NDArray[np.float64],
     thermal_intensity: NDArray[np.float64],
     delta_thermal_intensity: NDArray[np.float64],
     mu_1: float = 0.5,  # This is mu_1 in Toon et al. 1989
 ):
-    number_of_wavelengths, number_of_layers = np.shape(optical_depth)
     tau = optical_depth
     w0 = single_scattering_albedo
     g = scattering_asymmetry_parameter
@@ -137,12 +133,10 @@ def calculate_terms_for_DSolver(
         thermal_intensity[*bottom_layer] + delta_thermal_intensity[*bottom_layer] / 2
     )
 
-    alpha = np.sqrt(
-        (1 - w0) / (1 - w0 * g)
-    )  # sqrt( (1.-w0[i][j])/(1.-w0[i][j]*asym[i][j]) )
-    lamda = alpha * (1 - w0 * g) / mu_1  # alpha[j]*(1.-w0[i][j]*cosbar[j])/mu_1
-    gama = (1 - alpha) / (1 + alpha)  # (1.-alpha[j])/(1.+alpha[j])
-    term = 1 / 2 / (1 - w0 * g)  # 0.5/(1.-w0[i][j]*cosbar[j])
+    alpha = np.sqrt((1 - w0) / (1 - w0 * g))
+    lamda = alpha * (1 - w0 * g) / mu_1
+    gama = (1 - alpha) / (1 + alpha)
+    term = 1 / 2 / (1 - w0 * g)
 
     dti_x_term = delta_thermal_intensity * term
     dti_x_tau = delta_thermal_intensity * tau
@@ -156,10 +150,7 @@ def calculate_terms_for_DSolver(
     ep = np.exp(lamda_x_tau)
 
     tautop = tau[*top_layer]
-    btop = (
-        (1 - np.exp(-tautop / mu_1)) * thermal_intensity_at_TOA
-    )  # (1. - exp(-tautop/mu_1))*blackbodyL(tprof[0],wavelength)
-    # bsurf = thermal_intensity_at_base  # blackbodyL(tbase,wavelength)
+    btop = (1 - np.exp(-tautop / mu_1)) * thermal_intensity_at_TOA
     bottom = thermal_intensity_at_base + delta_thermal_intensity[*bottom_layer] * (
         mu_1 / tbfrac
     )  # Equivalent to multiplying taulayer by tbfrac.
@@ -168,17 +159,19 @@ def calculate_terms_for_DSolver(
 
 
 def DSolver_subroutine(cp, cpm1, cm, cmm1, ep, btop, bottom, gama, rsf=0):
-    # rsf is "surface" reflectivity, can set to zero
-    # Surface reflectivity should be zero for emission.
-    # (It is used in the tridiagonal matrix in the bottom layer.)
+    """
+    rsf is "surface" reflectivity, can set to zero
+    Surface reflectivity should be zero for emission.
+    (It is used in the tridiagonal matrix in the bottom layer.)
 
-    # DSolver subroutine to compute xk1 and xk2.
-    # Computes a,b,c,d coefficients first, top to bottom
-    # Then as and ds, *bottom to top*
-    # Then xk coefficients, top to bottom
-    # af, bd, cd, and df appear to be A_l, B_l, D_l, and E_l in Toon et al.
-    # xk1 and xk2 appear to be Y_1n and Y_2n in Toon et al.
-    # However, these do not match their formulae.
+    DSolver subroutine to compute xk1 and xk2.
+    Computes a,b,c,d coefficients first, top to bottom
+    Then as and ds, *bottom to top*
+    Then xk coefficients, top to bottom
+    af, bd, cd, and df appear to be A_l, B_l, D_l, and E_l in Toon et al.
+    xk1 and xk2 appear to be Y_1n and Y_2n in Toon et al.
+    However, these do not match their formulae.
+    """
 
     e1 = ep + gama / ep
     e2 = ep - gama / ep
@@ -192,44 +185,28 @@ def DSolver_subroutine(cp, cpm1, cm, cmm1, ep, btop, bottom, gama, rsf=0):
     df_top = btop - cmm1[*top_layer]
 
     # odd indices
-    odd_afs = (e1[*upper_edges] + e3[*upper_edges]) * (
-        gama[*lower_edges] - 1
-    )  # (e1[nn]+e3[nn])*(gama[nn+1]-1.)
-    odd_bfs = (e2[*upper_edges] + e4[*upper_edges]) * (
-        gama[*lower_edges] - 1
-    )  # e2[nn]+e4[nn])*(gama[nn+1]-1.)
-    odd_cfs = 2 * (1 - gama[*lower_edges] ** 2)  # 2.*(1.-gama[nn+1]*gama[nn+1])
-    odd_dfs = (
-        gama[*lower_edges] - 1
-    ) * (  # (gama[nn+1]-1.)*(cpm1[nn+1]-cp[nn]) + (1.-gama[nn+1])*(cm[nn]-cmm1[nn+1])
+    odd_afs = (e1[*upper_edges] + e3[*upper_edges]) * (gama[*lower_edges] - 1)
+    odd_bfs = (e2[*upper_edges] + e4[*upper_edges]) * (gama[*lower_edges] - 1)
+    odd_cfs = 2 * (1 - gama[*lower_edges] ** 2)
+    odd_dfs = (gama[*lower_edges] - 1) * (
         (cpm1[*lower_edges] - cp[*upper_edges])
         + (cmm1[*lower_edges] - cm[*upper_edges])
     )
 
     # even indices -- NOTE: even and odd have been switched from the
     # Fortran code and Toon et al. due to fencepost effects.
-    even_afs = 2 * (1 - gama[*upper_edges] ** 2)  # 2.*(1.-gama[nn]*gama[nn])
-    even_bfs = (e1[*upper_edges] - e3[*upper_edges]) * (
-        gama[*lower_edges] + 1
-    )  # (e1[nn]-e3[nn])*(1.+gama[nn+1])
-    even_cfs = odd_afs  # (e1[nn]+e3[nn])*(gama[nn+1]-1.)
+    even_afs = 2 * (1 - gama[*upper_edges] ** 2)
+    even_bfs = (e1[*upper_edges] - e3[*upper_edges]) * (gama[*lower_edges] + 1)
+    even_cfs = odd_afs
     even_dfs = e3[*upper_edges] * (cpm1[*lower_edges] - cp[*upper_edges]) + e1[
         *upper_edges
-    ] * (
-        cm[*upper_edges] - cmm1[*lower_edges]
-    )  # e3[nn]*(cpm1[nn+1]-cp[nn]) + e1[nn]*(cm[nn]-cmm1[nn+1])
+    ] * (cm[*upper_edges] - cmm1[*lower_edges])
 
-    af_base = (
-        e1[*bottom_layer] - rsf * e3[*bottom_layer]
-    )  # e1[nlayershort-1] - rsf*e3[nlayershort-1]
-    bf_base = (
-        e2[*bottom_layer] - rsf * e4[*bottom_layer]
-    )  # e2[nlayershort-1] - rsf*e4[nlayershort-1]
+    af_base = e1[*bottom_layer] - rsf * e3[*bottom_layer]
+    bf_base = e2[*bottom_layer] - rsf * e4[*bottom_layer]
     cf_base = np.zeros_like(af_base)
-    # note: original C++ version says bsurf, but was called with bottom
-    df_base = (
-        bottom - cp[*bottom_layer] + rsf * cm[*bottom_layer]
-    )  # bottom - cp[nlayershort-1] + rsf*cm[nlayershort-1]
+    # NOTE: original C++ version says bsurf, but was called with bottom
+    df_base = bottom - cp[*bottom_layer] + rsf * cm[*bottom_layer]
 
     interleaved_afs = interleave(odd_afs, even_afs)
     interleaved_bfs = interleave(odd_bfs, even_bfs)
@@ -244,9 +221,6 @@ def DSolver_subroutine(cp, cpm1, cm, cmm1, ep, btop, bottom, gama, rsf=0):
     return afs, bfs, cfs, dfs
 
 
-# End of DSolver subroutine.
-
-
 def DTRIDGL_subroutine(afs, bfs, cfs, dfs):
     # DTRIDGL subroutine to compute the necessary xki array
     # This matches the algorithm in Toon et al.
@@ -254,8 +228,8 @@ def DTRIDGL_subroutine(afs, bfs, cfs, dfs):
     bf_base = bfs[*bottom_layer]
     df_base = dfs[*bottom_layer]
 
-    as_base = af_base / bf_base  # as[nl2-1] = af[nl2-1]/bf[nl2-1]
-    ds_base = df_base / bf_base  # ds[nl2-1] = df[nl2-1]/bf[nl2-1]
+    as_base = af_base / bf_base
+    ds_base = df_base / bf_base
 
     as_terms = np.empty_like(afs, dtype=np.float64)
     as_terms[*bottom_layer] = as_base
@@ -282,9 +256,6 @@ def DTRIDGL_subroutine(afs, bfs, cfs, dfs):
     return xki_terms
 
 
-# End of DTRIDGL subroutine
-
-
 def calculate_flux(
     optical_depth: NDArray[np.float64],
     single_scattering_albedo: NDArray[np.float64],
@@ -303,8 +274,7 @@ def calculate_flux(
         thermal_intensity[*bottom_layer] + delta_thermal_intensity[*bottom_layer] / 2
     )
 
-    # bsurf = thermal_intensity_at_base
-    number_of_layers = np.shape(tau)[-1]
+    number_of_layers: int = np.shape(tau)[-1]
 
     # NOTE: there was a line in the original C++ for loop (index n3):
     # if(xk2[n3]!=0. && fabs(xk2[n3]/xk[2*n3] < 1.e-30)) xk2[n3] = 0.;

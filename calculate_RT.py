@@ -185,10 +185,6 @@ if __name__ == "__main__":
         name="thermal_intensity",
         attrs={"units": "erg s^-1 cm^-3 sr^-1"},
     )
-    test_thermal_intensity.to_netcdf(
-        test_data_structure_directory
-        / f"test_thermal_intensity_{test_opacity_catalog}.nc"
-    )
 
     test_delta_thermal_intensity = xr.DataArray(
         data=test_delta_thermal_intensity,
@@ -217,22 +213,11 @@ if __name__ == "__main__":
         test_data_structure_directory / "test_RT_inputs_optical_depth.nc"
     )
 
-    RT_inputs["scattering_asymmetry_parameter"].to_netcdf(
-        test_data_structure_directory
-        / "test_RT_inputs_scattering_asymmetry_parameter.nc"
-    )
-
-    RT_inputs["single_scattering_albedo"].to_netcdf(
-        test_data_structure_directory / "test_RT_inputs_single_scattering_albedo.nc"
-    )
-
     emitted_flux: xr.DataArray = (
         RT_Toon1989(*RT_inputs.values())
         .rename("emitted_flux")
         .assign_attrs(units="erg s^-1 cm^-3")
     )
-
-    emitted_flux.to_netcdf(test_data_structure_directory / "test_emitted_flux.nc")
 
     cumulative_optical_depth: xr.DataArray = (
         RT_inputs["optical_depth"].cumulative("pressure").sum()
@@ -248,9 +233,7 @@ if __name__ == "__main__":
     )
 
     observed_onestream_flux: xr.DataArray = (
-        emitted_onestream_flux
-        * np.pi
-        * (test_planet_radius_in_cm / test_distance_in_cm) ** 2
+        emitted_onestream_flux * (test_planet_radius_in_cm / test_distance_in_cm) ** 2
     ).rename("observed_flux")
 
     observed_twostream_flux: xr.DataArray = (
@@ -282,6 +265,7 @@ if __name__ == "__main__":
     test_apollo_model_spectrum_filepath: Path = (
         current_directory
         / "test_inputs"
+        / "old_files_for_comparison"
         / (
             "2M2236.Piette.G395H.cloud-free.2024-02-27.continuation.retrieved.Spectrum.binned.dat"
         )
@@ -293,10 +277,17 @@ if __name__ == "__main__":
     tamso_wavelo, tamso_wavehi, tamso_flux, *_ = test_apollo_model_spectral_output
     tamso_wave = (tamso_wavelo + tamso_wavehi) / 2
 
-    plt.plot(test_data_wavelengths, resampled_onestream_flux, label="onestream")
+    flux_factor = np.where(test_data_wavelengths.to_numpy() < 4.10, 1.133373, 0.904548)
+
+    plt.plot(
+        test_data_wavelengths, resampled_onestream_flux * flux_factor, label="onestream"
+    )
     plt.plot(test_data_wavelengths, test_data.flux_lambda, label="test 2M2236b data")
-    plt.plot(test_data_wavelengths, resampled_twostream_flux, label="twostream")
+    plt.plot(
+        test_data_wavelengths, resampled_twostream_flux * flux_factor, label="twostream"
+    )
     plt.plot(tamso_wave, tamso_flux, label="apollo model")
+    plt.legend()
     plt.savefig(
         test_data_structure_directory / "test_RT_comparison.pdf", bbox_inches="tight"
     )

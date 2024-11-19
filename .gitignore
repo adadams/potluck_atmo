@@ -18,3 +18,4 @@ test_inputs/test_data_structures/test_observed_onestream_flux.nc
 test_inputs/test_data_structures/test_observed_twostream_flux.nc
 test_inputs/test_data_structures/test_thermal_intensity_jwst50k.nc
 test_inputs/test_data_structures/test_emitted_onestream_flux.nc
+check_xarray_files.py

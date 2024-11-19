@@ -20,7 +20,7 @@ def general_piette_function(
     return TP_profile
 
 
-def intentionally_wrong_piette(
+def piette(
     T_m4: float,
     T_m3: float,
     T_m2: float,
@@ -33,7 +33,7 @@ def intentionally_wrong_piette(
     T_2p5: float,
     pressures: NDArray[np.float64],
 ) -> NDArray[np.float64]:
-    log_pressure_nodes = np.array([-4, -3, -2, -1, 0, 0.5, 1, 1.5, 2])
+    log_pressure_nodes = np.array([-4, -3, -2, -1, 0, 0.5, 1, 1.5, 2, 2.5])
 
     return general_piette_function(
         T_m4,
@@ -45,6 +45,7 @@ def intentionally_wrong_piette(
         T_1,
         T_1p5,
         T_2,
+        T_2p5,
         log_pressure_nodes=log_pressure_nodes,
         log_pressures=pressures,
         smoothing_parameter=0.3,

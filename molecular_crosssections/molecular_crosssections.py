@@ -82,22 +82,28 @@ def load_crosssections_into_array(
     number_of_spectral_elements: int,
     filepaths: dict[str, Path],
     excluded_species: list[str] = None,
+    minimum_value: float = 1e-50,
+    maximum_value: float = None,
 ):
     if excluded_species is None:
         excluded_species = []
 
-    def load_array(filepath, loadtxt_kwargs=dict(skiprows=1)):
+    def load_array(
+        filepath,
+        loadtxt_kwargs=dict(skiprows=1),
+        minimum_value: float = 1e-50,
+        maximum_value: float = None,
+    ):
         original_array = np.loadtxt(filepath, **loadtxt_kwargs)
-        print()
 
-        return np.flip(original_array).reshape(
+        return original_array.clip(minimum_value, maximum_value).reshape(
             number_of_pressure_layers,
             number_of_temperatures,
             number_of_spectral_elements,
         )
 
     return {
-        species: load_array(filepath)[:, :, ::-1]
+        species: load_array(filepath)
         for species, filepath in filepaths.items()
         if species not in excluded_species
     }
