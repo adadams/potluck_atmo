@@ -1,4 +1,4 @@
-from typing import Final, NamedTuple, Optional, TypedDict
+from typing import Final, NamedTuple, Optional
 
 import numpy as np
 from numpy.typing import NDArray
@@ -44,7 +44,7 @@ lower_edges: list[slice] = [slice(None, None), slice(None, -1)]
 ###############################################################################
 ############################ Main callable function. ##########################
 ###############################################################################
-class RTToon1989Inputs(TypedDict):
+class RTToon1989Inputs(NamedTuple):
     thermal_intensity: NDArray[np.float64]  # (pressure, wavelength)
     delta_thermal_intensity: NDArray[np.float64]  # (pressure, wavelength)
     scattering_asymmetry_parameter: NDArray[np.float64]  # (pressure, wavelength)

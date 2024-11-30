@@ -1,12 +1,4 @@
-from typing import (
-    Annotated,
-    Literal,
-    Optional,
-    Required,
-    Type,
-    TypeAlias,
-    TypedDict,
-)
+from typing import Annotated, Literal, Optional, Type, TypeAlias
 
 import msgspec
 import xarray as xr
@@ -47,8 +39,8 @@ ArgumentDimensionType: TypeAlias = tuple[DimensionAnnotation]
 FunctionDimensionType: TypeAlias = tuple[ArgumentDimensionType]
 
 
-class QuantityAttrs(TypedDict):
-    units: Required[str]
+class QuantityAttrs(msgspec.Struct):
+    units: str
     unit_base_rep: UnitType
 
 

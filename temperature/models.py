@@ -31,7 +31,7 @@ def piette(
     T_1p5: float,
     T_2: float,
     T_2p5: float,
-    pressures: NDArray[np.float64],
+    log_pressures: NDArray[np.float64],
 ) -> NDArray[np.float64]:
     log_pressure_nodes = np.array([-4, -3, -2, -1, 0, 0.5, 1, 1.5, 2, 2.5])
 
@@ -47,6 +47,6 @@ def piette(
         T_2,
         T_2p5,
         log_pressure_nodes=log_pressure_nodes,
-        log_pressures=pressures,
+        log_pressures=log_pressures,
         smoothing_parameter=0.3,
     )

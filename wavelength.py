@@ -7,6 +7,10 @@ from numpy.typing import NDArray
 
 from xarray_serialization import UnitsAttrs, XarrayDimension, XarrayVariable
 
+type CoordinateBuilder = Callable[
+    [NDArray[np.float64], XarrayDimension, UnitsAttrs, type], XarrayVariable
+]
+
 
 def build_coordinate(
     data: NDArray[np.float64],
@@ -15,11 +19,6 @@ def build_coordinate(
     coordinate_class: type = XarrayVariable,
 ) -> XarrayVariable:
     return coordinate_class(data=data, dims=dims, attrs=attrs)
-
-
-type CoordinateBuilder = Callable[
-    [NDArray[np.float64], XarrayDimension, UnitsAttrs, type], XarrayVariable
-]
 
 
 class WavelengthCoordinate(XarrayVariable): ...

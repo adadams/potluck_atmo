@@ -186,3 +186,7 @@ def map_function_arguments_to_dataset_variables(
     return partial(
         function_using_dataset, function=function, variable_mapping=variable_mapping
     )
+
+
+def rename_and_unitize(data_array: xr.DataArray, name: str, units: str) -> xr.DataArray:
+    return data_array.rename(name).assign_attrs(units=units)

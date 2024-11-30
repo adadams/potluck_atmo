@@ -1,10 +1,10 @@
 from typing import Protocol
 
-from material.scattering.types import TwoStreamMaterial
+from material.types import TwoStreamMaterial
 
 
 class MaterialFunction(Protocol):
-    def __call__(self) -> TwoStreamMaterial: ...
+    def __call__(self, *args, **kwargs) -> TwoStreamMaterial: ...
 
 
 class GasFunction(MaterialFunction): ...

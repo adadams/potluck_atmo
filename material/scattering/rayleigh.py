@@ -64,12 +64,12 @@ def calculate_rayleigh_scattering_attenuation_coefficients(
     return crosssections * (frequencies / reference_frequency) ** 4 * number_density
 
 
-def calculate_two_stream_components(
+def calculate_two_stream_scattering_components(
     wavelengths_in_cm: xr.DataArray,
     crosssections: xr.DataArray,
     number_density: xr.DataArray,
     reference_frequency: float = REFERENCE_FREQUENCY_IN_HZ,
-) -> float | NDArray[np.float64]:
+) -> TwoStreamScatteringCoefficients:
     rayleigh_scattering_crosssections: xr.DataArray = (
         calculate_rayleigh_scattering_crosssections(
             wavelengths_in_cm,

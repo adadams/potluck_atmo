@@ -2,6 +2,7 @@
 Xarray structures:
   ☐ Unit handling, not just dimensionality handling!
   ☐ Some numpy functions will break the continuity of xarray apply_ufunc (for example, slicing), so we should think carefully about how our metadata could "recover" that information as well as possible.
+  ☐ Dimensionalize doesn't work (yet) with non-dimensionalized arguments, like floats.
 
 Test RT scheme:
   ✔ Changing the maximum exponential cutoff (MAXIMUM_EXP_FLOAT in RT_Toon1989.py) affects how the (seemingly wrong) spectrum looks. Increasing it to effectively no cutoff reduces the anomalous alkali spike (where it should be an absorption feature). Turning the exponent lower ends up reaching the no-Rayleigh case as a limit. Maybe there's some competing exponents at high values? @done(24-11-19 18:22)

@@ -91,8 +91,8 @@ def load_crosssections_into_array(
     def load_array(
         filepath,
         loadtxt_kwargs=dict(skiprows=1),
-        minimum_value: float = 1e-50,
-        maximum_value: float = None,
+        minimum_value: float = minimum_value,
+        maximum_value: float = maximum_value,
     ):
         original_array = np.loadtxt(filepath, **loadtxt_kwargs)
 

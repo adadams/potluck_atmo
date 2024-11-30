@@ -7,3 +7,5 @@ BAR_TO_BARYE: Final[float] = 1.0e6
 EARTH_RADIUS_IN_CM: Final[float] = 6.371e8
 JUPITER_RADIUS_IN_CM: Final[float] = 6.991e8
 JUPITER_MASS_IN_G: Final[float] = 1.898e30
+PARSEC_TO_CM: Final[float] = 3.08567758128e18
+MICRONS_TO_CM: Final[float] = 1e-4
