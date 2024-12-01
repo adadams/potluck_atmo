@@ -4,7 +4,7 @@ import msgspec
 import numpy as np
 from numpy.typing import NDArray
 
-BOLTZMANN_CONSTANT_IN_CGS: Final[float] = 1.38065e-16  # [cm^2 g s^-2 K^-1]
+from constants_and_conversions import BOLTZMANN_CONSTANT_IN_CGS
 
 SOLAR_METAL_FRACTION: Final[float] = 0.0196
 

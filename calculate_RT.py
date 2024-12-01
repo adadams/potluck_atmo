@@ -1,5 +1,3 @@
-from collections.abc import Callable
-from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -7,9 +5,10 @@ import msgspec
 import numpy as np
 import xarray as xr
 from matplotlib import pyplot as plt
-from spectres import spectres
 
-from helpful_unit_conversions import MICRONS_TO_CM
+from compile_crosssection_data import curate_crosssection_catalog
+from compile_vertical_structure import compile_vertical_structure_for_forward_model
+from constants_and_conversions import MICRONS_TO_CM
 from material.two_stream import compile_composite_two_stream_parameters
 from material.types import TwoStreamParameters
 from radiative_transfer.RT_one_stream import calculate_spectral_intensity_at_surface
@@ -22,55 +21,22 @@ from test_inputs.test_2M2236b_G395H.test_2M2236b_G395H_forward_model_inputs impo
     vertical_structure_datatree_path,
 )
 from vertical.altitude import convert_dataset_by_pressure_levels_to_pressure_layers
+from wavelength import resample_spectral_quantity_to_new_wavelengths
 from xarray_functional_wrappers import rename_and_unitize
 
 current_directory: Path = Path(__file__).parent
-
-
-def curate_crosssection_catalog(
-    crosssection_catalog_dataset: xr.Dataset,
-    temperatures_by_layer: xr.DataArray,
-    pressures_by_layer: xr.DataArray,
-    species_present_in_model: list[str],
-):
-    return (
-        (
-            crosssection_catalog_dataset.interp(
-                temperature=temperatures_by_layer,
-                pressure=pressures_by_layer,
-            )
-        )
-        .get(species_present_in_model)
-        .to_array(dim="species", name="crosssections")
-    )
-
-
-resample_by_spectres: Callable[
-    [xr.DataArray, xr.DataArray, xr.DataArray], xr.DataArray
-] = partial(
-    xr.apply_ufunc,
-    spectres,
-    input_core_dims=[["wavelength"], ["wavelength"], ["wavelength"]],
-    output_core_dims=[["wavelength"]],
-    exclude_dims=set(("wavelength",)),
-    keep_attrs=True,
-)
-
-
-def resample_spectral_quantity_to_new_wavelengths(
-    new_wavelengths: xr.DataArray,
-    model_wavelengths: xr.DataArray,
-    model_spectral_quantity: xr.DataArray,
-) -> xr.Dataset:
-    return resample_by_spectres(
-        new_wavelengths, model_wavelengths, model_spectral_quantity
-    ).assign_coords(wavelength=new_wavelengths)
 
 
 if __name__ == "__main__":
     data: xr.Dataset = xr.open_dataset(data_filepath)
     data_wavelengths: xr.DataArray = data.wavelength
     data_flux_lambda: xr.DataArray = data.flux_lambda
+
+    compiled_vertical_dataset: xr.Dataset = (
+        compile_vertical_structure_for_forward_model(
+            user_vertical_inputs=user_forward_model_inputs.vertical_inputs
+        )
+    )
 
     vertical_inputs_datatree: xr.DataTree = xr.open_datatree(
         vertical_structure_datatree_path
@@ -79,8 +45,6 @@ if __name__ == "__main__":
     vertical_structure_dataset: xr.Dataset = vertical_inputs_datatree[
         "vertical_structure"
     ].to_dataset()
-
-    path_lengths: xr.DataArray = user_forward_model_inputs.path_lengths_by_level
 
     vertical_structure_dataset_by_layer: xr.Dataset = (
         convert_dataset_by_pressure_levels_to_pressure_layers(
@@ -116,15 +80,14 @@ if __name__ == "__main__":
         )
     )
 
-    model_wavelengths: xr.DataArray = (
+    model_wavelengths_in_microns: xr.DataArray = (
         crosssection_catalog_dataset_interpolated_to_model.wavelength
     )
-
-    wavelengths_in_cm: xr.DataArray = model_wavelengths * MICRONS_TO_CM
+    model_wavelengths_in_cm = model_wavelengths_in_microns * MICRONS_TO_CM
 
     temperature_grid, wavelength_grid = np.meshgrid(
         user_forward_model_inputs.vertical_inputs.temperatures_by_level,
-        wavelengths_in_cm,
+        model_wavelengths_in_cm,
     )
 
     thermal_intensity, delta_thermal_intensity = calculate_thermal_intensity_by_layer(
@@ -135,7 +98,7 @@ if __name__ == "__main__":
         "dims": ("wavelength", "pressure"),
         "coords": {
             "pressure": vertical_structure_dataset_by_layer.pressure,
-            "wavelength": model_wavelengths,
+            "wavelength": model_wavelengths_in_microns,
         },
         "attrs": {"units": "erg s^-1 cm^-3 sr^-1"},
     }
@@ -158,10 +121,10 @@ if __name__ == "__main__":
 
     two_stream_parameters: TwoStreamParameters = (
         compile_composite_two_stream_parameters(
-            wavelengths_in_cm=wavelengths_in_cm,
+            wavelengths_in_cm=model_wavelengths_in_cm,
             crosssections=crosssection_catalog_dataset_interpolated_to_model,
             number_density=number_densities,
-            path_lengths=path_lengths,
+            path_lengths=user_forward_model_inputs.path_lengths_by_level,
         )
     )
 

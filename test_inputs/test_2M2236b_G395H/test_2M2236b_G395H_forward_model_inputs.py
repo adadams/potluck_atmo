@@ -2,9 +2,9 @@ from pathlib import Path
 
 import xarray as xr
 
-from density import mass
-from helpful_unit_conversions import AMU_IN_GRAMS, PARSEC_TO_CM
-from molecular_crosssections.molecular_metrics import calculate_mean_molecular_weight
+from constants_and_conversions import AMU_IN_GRAMS, PARSEC_TO_CM
+from density import calculate_mass_from_radius_and_surface_gravity
+from material.gases.molecular_metrics import calculate_mean_molecular_weight
 from test_inputs.test_2M2236b_G395H.test_2M2236b_G395H_vertical_inputs import (
     user_vertical_inputs,
 )
@@ -14,20 +14,20 @@ from vertical.altitude import (
     calculate_altitude_profile,
 )
 
-current_directory: Path = Path(__file__).parent.parent.parent
+potluck_directory: Path = Path(__file__).parent.parent.parent
 
 ################### FORWARD MODEL DATA ###################
 opacity_catalog: str = "jwst50k"
 
 opacity_data_directory: Path = (
-    current_directory / "molecular_crosssections" / "reference_data"
+    potluck_directory / "material" / "gases" / "reference_data"
 )
 
 catalog_filepath: Path = opacity_data_directory / f"{opacity_catalog}.nc"
 crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(catalog_filepath)
 
 data_structure_directory: Path = (
-    current_directory / "test_inputs" / "test_data_structures"
+    potluck_directory / "test_inputs" / "test_data_structures"
 )
 
 data_filepath: Path = data_structure_directory / "2M2236b_NIRSpec_G395H_R500_APOLLO.nc"
@@ -45,7 +45,7 @@ mean_molecular_weight_in_g: float = (
     * AMU_IN_GRAMS
 )
 
-planet_mass_in_g: float = mass(
+planet_mass_in_g: float = calculate_mass_from_radius_and_surface_gravity(
     user_vertical_inputs.planet_radius_in_cm, user_vertical_inputs.planet_gravity_in_cgs
 )
 

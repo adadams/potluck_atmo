@@ -1,23 +1,19 @@
-from typing import Final
-
 import numpy as np
 from numpy.typing import NDArray
 
-from material.mixing_ratios import (
-    log_abundances_to_mixing_ratios,
-    uniform_log_abundances_to_log_abundances_by_level,
-)
-from molecular_crosssections.molecular_metrics import (
+from constants_and_conversions import EARTH_RADIUS_IN_CM
+from material.gases.molecular_metrics import (
     MoleculeMetrics,
     calculate_cumulative_molecular_metrics,
     calculate_molecular_metrics,
     calculate_weighted_molecular_weights,
 )
+from material.mixing_ratios import (
+    log_abundances_to_mixing_ratios,
+    uniform_log_abundances_to_log_abundances_by_level,
+)
 from temperature.models import piette as TP_model
 from test_inputs.test_data_structures.input_structs import UserVerticalModelInputs
-
-MICRONS_TO_CM: Final[float] = 1e-4
-EARTH_RADIUS_IN_CM: Final[float] = 6.371e8
 
 ################### VERTICAL STRUCTURE ###################
 planet_radius_in_cm: float = 8.184222080729041 * EARTH_RADIUS_IN_CM

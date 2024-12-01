@@ -1,12 +1,9 @@
 from pathlib import Path
-from typing import Final
 
 import xarray as xr
 
+from constants_and_conversions import MICRONS_TO_CM
 from material.scattering.rayleigh import calculate_rayleigh_scattering_crosssections
-
-MICRONS_TO_CM: Final[float] = 1e-4
-
 
 if __name__ == "__main__":
     test_opacity_catalog: str = "nir"

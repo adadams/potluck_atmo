@@ -1,11 +1,11 @@
-from typing import Final
-
 import numpy as np
 import xarray as xr
 from numpy.typing import NDArray
 
-GRAVITATIONAL_CONSTANT_IN_CGS: Final[float] = 6.67408e-8  # [cm^3 g^-1 s^-2]
-BOLTZMANN_CONSTANT_IN_CGS: Final[float] = 1.38065e-16  # [cm^2 g s^-2 K^-1]
+from constants_and_conversions import (
+    BOLTZMANN_CONSTANT_IN_CGS,
+    GRAVITATIONAL_CONSTANT_IN_CGS,
+)
 
 
 def convert_pressure_coordinate_by_level_to_by_layer(

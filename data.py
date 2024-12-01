@@ -3,9 +3,7 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 
-
-def get_wavelengths_from_wavelength_bins(wavelength_bin_starts, wavelength_bin_ends):
-    return (wavelength_bin_starts + wavelength_bin_ends) / 2
+from wavelength import get_wavelengths_from_wavelength_bins
 
 
 def convert_APOLLO_data_to_dataset(filepath: Path) -> xr.Dataset:

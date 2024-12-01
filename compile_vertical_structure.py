@@ -1,26 +1,109 @@
 from pathlib import Path
+from typing import NamedTuple
 
 import msgspec
 import numpy as np
 import xarray as xr
 from numpy.typing import NDArray
 
-from density import mass
-from helpful_unit_conversions import (
+from constants_and_conversions import (
     AMU_IN_GRAMS,
     BAR_TO_BARYE,
     BOLTZMANN_CONSTANT_IN_CGS,
 )
-from molecular_crosssections.molecular_metrics import (
+from density import calculate_mass_from_radius_and_surface_gravity
+from material.gases.molecular_metrics import (
     MOLECULAR_WEIGHTS,
     MoleculeMetrics,
+    calculate_mean_molecular_weight,
     calculate_molecular_metrics,
+    calculate_weighted_molecular_weights,
+    mixing_ratios_to_number_densities,
 )
 from test_inputs.test_2M2236b_G395H.test_2M2236b_G395H_vertical_inputs import (
     user_vertical_inputs,
 )
-from vertical.altitude import calculate_altitude_profile
+from test_inputs.test_data_structures.input_structs import UserVerticalModelInputs
+from vertical.altitude import (
+    calculate_altitude_profile,
+    convert_dataset_by_pressure_levels_to_pressure_layers,
+)
 from xarray_serialization import XarrayDataArray, XarrayDataset
+
+
+class ForwardModelXarrayInputs(NamedTuple):
+    by_level: xr.Dataset
+    by_layer: xr.Dataset
+
+
+def compile_vertical_structure_for_forward_model(
+    user_vertical_inputs: UserVerticalModelInputs,
+) -> xr.Dataset:
+    pressure_coordinates: dict[str, xr.Variable] = {
+        "pressure": xr.Variable(
+            dims=("pressure",),
+            data=user_vertical_inputs.pressures_by_level,
+            attrs={"units": "bar"},
+        )
+    }
+
+    temperature_dataarray: xr.DataArray = xr.DataArray(
+        user_vertical_inputs.temperatures_by_level,
+        coords=pressure_coordinates,
+        dims=("pressure",),
+        name="temperature",
+        attrs={"units": "kelvin"},
+    )
+
+    molecular_weights_by_level: dict[str, NDArray[np.float64]] = (
+        calculate_weighted_molecular_weights(
+            mixing_ratios=user_vertical_inputs.mixing_ratios_by_level
+        )
+    )
+
+    mean_molecular_weight_by_level: NDArray[np.float64] = (
+        calculate_mean_molecular_weight(
+            mixing_ratios=user_vertical_inputs.mixing_ratios_by_level
+        )
+    )
+
+    number_densities: dict[str, NDArray[np.float64]] = {
+        species: xr.DataArray(data=number_density_array, coords=pressure_coordinates)
+        for species, number_density_array in mixing_ratios_to_number_densities(
+            mixing_ratios_by_level=user_vertical_inputs.mixing_ratios_by_level,
+            molecular_weights_by_level=molecular_weights_by_level,
+            mean_molecular_weight_by_level=mean_molecular_weight_by_level,
+            pressure_in_cgs=user_vertical_inputs.pressures_by_level,
+            temperatures_in_K=user_vertical_inputs.temperatures_by_level,
+        ).items()
+    }
+
+    number_densities_dataarray: xr.Dataset = xr.Dataset(
+        data_vars=number_densities,
+        coords=pressure_coordinates,
+        attrs={"units": "cm^-3"},
+    )
+
+    number_densities_dataarray = number_densities_dataarray.to_array(
+        dim="species", name="number_density"
+    )
+
+    inputs_by_level: xr.Dataset = xr.Dataset(
+        {
+            "temperature": temperature_dataarray,
+            "number_density": number_densities_dataarray,
+        }
+    )
+
+    inputs_by_layer: xr.Dataset = convert_dataset_by_pressure_levels_to_pressure_layers(
+        inputs_by_level
+    )
+
+    return ForwardModelXarrayInputs(
+        by_level=inputs_by_level,
+        by_layer=inputs_by_layer,
+    )
+
 
 if __name__ == "__main__":
     current_directory: Path = Path(__file__).parent
@@ -28,7 +111,7 @@ if __name__ == "__main__":
         current_directory / "test_inputs" / "test_data_structures"
     )
 
-    planet_mass_in_g: float = mass(
+    planet_mass_in_g: float = calculate_mass_from_radius_and_surface_gravity(
         radius_in_cm=user_vertical_inputs.planet_radius_in_cm,
         surface_gravity_in_cgs=user_vertical_inputs.planet_gravity_in_cgs,
     )

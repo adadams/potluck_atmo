@@ -1,14 +1,11 @@
-from typing import Final, NamedTuple
+from typing import NamedTuple
 
 import numpy as np
 from numpy.typing import NDArray
 
+from constants_and_conversions import c, hc, hc_over_k
 from xarray_functional_wrappers import Dimensionalize
 from xarray_serialization import PressureType, WavelengthType
-
-c: Final[float] = 2.99792458e10  # in CGS
-hc: Final[float] = 1.98644568e-16  # in CGS
-hc_over_k: Final[float] = 1.98644568 / 1.38064852
 
 
 def blackbody_intensity_by_wavelength(

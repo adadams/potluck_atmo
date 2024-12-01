@@ -9,3 +9,7 @@ JUPITER_RADIUS_IN_CM: Final[float] = 6.991e8
 JUPITER_MASS_IN_G: Final[float] = 1.898e30
 PARSEC_TO_CM: Final[float] = 3.08567758128e18
 MICRONS_TO_CM: Final[float] = 1e-4
+
+c: Final[float] = 2.99792458e10  # in CGS
+hc: Final[float] = 1.98644568e-16  # in CGS
+hc_over_k: Final[float] = 1.98644568 / 1.38064852

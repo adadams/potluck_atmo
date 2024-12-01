@@ -6,11 +6,12 @@ from typing import Any
 import msgspec
 import numpy as np
 import xarray as xr
-from basic_functions import (
+
+from material.gases.sanity_checks import check_if_all_headers_match
+from wavelength import (
     get_number_of_wavelengths,
     get_wavelengths_from_number_of_elements_and_resolution,
 )
-from sanity_checks import check_if_all_headers_match
 
 current_directory: Path = Path(__file__).parent
 
@@ -43,7 +44,7 @@ class MolecularCrossSectionMetadata(msgspec.Struct):
 
 
 molecular_metadata_filepath: Path = (
-    current_directory / "reference_data" / "gas_properties.toml"
+    current_directory / "material" / "gases" / "reference_data" / "gas_properties.toml"
 )
 
 molecular_metadata: dict[str, MolecularCrossSectionMetadata] = {

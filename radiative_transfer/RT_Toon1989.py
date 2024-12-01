@@ -45,11 +45,11 @@ lower_edges: list[slice] = [slice(None, None), slice(None, -1)]
 ############################ Main callable function. ##########################
 ###############################################################################
 class RTToon1989Inputs(NamedTuple):
-    thermal_intensity: NDArray[np.float64]  # (pressure, wavelength)
-    delta_thermal_intensity: NDArray[np.float64]  # (pressure, wavelength)
-    scattering_asymmetry_parameter: NDArray[np.float64]  # (pressure, wavelength)
-    single_scattering_albedo: NDArray[np.float64]  # (pressure, wavelength)
-    optical_depth: NDArray[np.float64]  # (pressure, wavelength)
+    thermal_intensity: NDArray[np.float64]  # (wavelength, pressure)
+    delta_thermal_intensity: NDArray[np.float64]  # (wavelength, pressure)
+    scattering_asymmetry_parameter: NDArray[np.float64]  # (wavelength, pressure)
+    single_scattering_albedo: NDArray[np.float64]  # (wavelength, pressure)
+    optical_depth: NDArray[np.float64]  # (wavelength, pressure)
     stream_cosine_angles: Optional[NDArray[np.float64]] = STREAM_COSINE_ANGLES
     stream_weights: Optional[NDArray[np.float64]] = STREAM_WEIGHTS
 
@@ -85,7 +85,7 @@ def RT_Toon1989(
 
     xki_terms = DTRIDGL_subroutine(*terms_for_DTRIDGL)
 
-    total_flux = calculate_flux(
+    return calculate_flux(
         optical_depth,
         single_scattering_albedo,
         scattering_asymmetry_parameter,
@@ -95,7 +95,6 @@ def RT_Toon1989(
         stream_cosine_angles,
         stream_weights,
     )
-    return total_flux
 
 
 ###############################################################################

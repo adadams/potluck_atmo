@@ -3,7 +3,9 @@ from functools import partial, wraps
 from typing import Any
 
 import numpy as np
+import xarray as xr
 from numpy.typing import NDArray
+from spectres import spectres
 
 from xarray_serialization import UnitsAttrs, XarrayDimension, XarrayVariable
 
@@ -71,6 +73,48 @@ def build_wavelength_array(
     return minimum_wavelength * np.exp(
         np.arange(number_of_spectral_elements) / effective_resolution
     )
+
+
+def get_number_of_wavelengths(
+    starting_wavelength: float, ending_wavelength: float, resolution: float
+) -> int:
+    return int(
+        np.ceil(resolution * np.log(ending_wavelength / starting_wavelength)) + 1
+    )
+
+
+def get_wavelengths_from_number_of_elements_and_resolution(
+    starting_wavelength: float, number_of_elements: int, spectral_resolution: float
+) -> NDArray[np.float64]:
+    return starting_wavelength * np.exp(
+        np.arange(number_of_elements) / spectral_resolution
+    )
+
+
+def get_wavelengths_from_wavelength_bins(wavelength_bin_starts, wavelength_bin_ends):
+    return (wavelength_bin_starts + wavelength_bin_ends) / 2
+
+
+resample_by_spectres: Callable[
+    [xr.DataArray, xr.DataArray, xr.DataArray], xr.DataArray
+] = partial(
+    xr.apply_ufunc,
+    spectres,
+    input_core_dims=[["wavelength"], ["wavelength"], ["wavelength"]],
+    output_core_dims=[["wavelength"]],
+    exclude_dims=set(("wavelength",)),
+    keep_attrs=True,
+)
+
+
+def resample_spectral_quantity_to_new_wavelengths(
+    new_wavelengths: xr.DataArray,
+    model_wavelengths: xr.DataArray,
+    model_spectral_quantity: xr.DataArray,
+) -> xr.Dataset:
+    return resample_by_spectres(
+        new_wavelengths, model_wavelengths, model_spectral_quantity
+    ).assign_coords(wavelength=new_wavelengths)
 
 
 if __name__ == "__main__":
