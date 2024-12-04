@@ -67,7 +67,6 @@ def calculate_altitude_profile(
         temperature_in_K,
         mean_molecular_weight_in_g,
     ) in enumerate(
-        # zip(log_pressure_differences, reversed(temperatures_in_K[:-1])),
         zip(
             reversed(log_pressure_differences),
             reversed(temperatures_in_K[:-1]),

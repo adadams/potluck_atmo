@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import msgspec
 import numpy as np
@@ -14,21 +14,19 @@ from constants_and_conversions import (
 from density import calculate_mass_from_radius_and_surface_gravity
 from material.gases.molecular_metrics import (
     MOLECULAR_WEIGHTS,
-    MoleculeMetrics,
     calculate_mean_molecular_weight,
-    calculate_molecular_metrics,
     calculate_weighted_molecular_weights,
     mixing_ratios_to_number_densities,
 )
-from test_inputs.test_2M2236b_G395H.test_2M2236b_G395H_vertical_inputs import (
-    user_vertical_inputs,
-)
-from test_inputs.test_data_structures.input_structs import UserVerticalModelInputs
+from user.input_importers import import_model_id, import_user_vertical_inputs
+from user.input_structs import UserVerticalModelInputs
 from vertical.altitude import (
     calculate_altitude_profile,
     convert_dataset_by_pressure_levels_to_pressure_layers,
 )
 from xarray_serialization import XarrayDataArray, XarrayDataset
+
+current_directory: Path = Path(__file__).parent
 
 
 class ForwardModelXarrayInputs(NamedTuple):
@@ -105,29 +103,25 @@ def compile_vertical_structure_for_forward_model(
     )
 
 
-if __name__ == "__main__":
-    current_directory: Path = Path(__file__).parent
-    data_structure_directory: Path = (
-        current_directory / "test_inputs" / "test_data_structures"
-    )
-
+def compile_comprehensive_vertical_structure(
+    user_vertical_inputs: UserVerticalModelInputs,
+) -> xr.DataTree:
     planet_mass_in_g: float = calculate_mass_from_radius_and_surface_gravity(
         radius_in_cm=user_vertical_inputs.planet_radius_in_cm,
         surface_gravity_in_cgs=user_vertical_inputs.planet_gravity_in_cgs,
     )
 
-    fiducial_molecular_metrics: MoleculeMetrics = calculate_molecular_metrics(
-        gas_abundances=user_vertical_inputs.mixing_ratios_by_level
-    )
-
-    molecular_weight: float = (
-        fiducial_molecular_metrics.mean_molecular_weight * AMU_IN_GRAMS
+    mean_molecular_weights_in_g: float = (
+        calculate_mean_molecular_weight(
+            mixing_ratios=user_vertical_inputs.mixing_ratios_by_level
+        )
+        * AMU_IN_GRAMS
     )
 
     altitudes_in_cm: NDArray[np.float64] = calculate_altitude_profile(
-        log_pressures=user_vertical_inputs.pressures_by_level,
-        temperatures=user_vertical_inputs.temperatures_by_level,
-        mean_molecular_weight_in_g=molecular_weight,
+        log_pressures_in_cgs=user_vertical_inputs.log_pressures_by_level.to_numpy(),
+        temperatures_in_K=user_vertical_inputs.temperatures_by_level,
+        mean_molecular_weights_in_g=mean_molecular_weights_in_g,
         planet_radius_in_cm=user_vertical_inputs.planet_radius_in_cm,
         planet_mass_in_g=planet_mass_in_g,
     )
@@ -138,7 +132,7 @@ if __name__ == "__main__":
     shared_coordinates: dict[str, xr.Variable] = {
         "pressure": xr.Variable(
             dims="pressure",
-            data=10**user_vertical_inputs.pressures_by_level,
+            data=user_vertical_inputs.pressures_by_level,
             attrs={"units": "bar"},
         )
     }
@@ -181,10 +175,14 @@ if __name__ == "__main__":
         for species, abundance in user_vertical_inputs.mixing_ratios_by_level.items()
     }
 
+    shared_molecular_attrs: dict[str, Any] = {
+        "mean_molecular_weight": mean_molecular_weights_in_g / AMU_IN_GRAMS
+    }  # msgspec.structs.asdict(fiducial_molecular_metrics),
+
     molecular_mixing_ratios_dataset: xr.Dataset = xr.Dataset(
         data_vars=molecular_mixing_ratios,
         coords=shared_coordinates,
-        attrs=msgspec.structs.asdict(fiducial_molecular_metrics),
+        attrs=shared_molecular_attrs,
     )
 
     molecular_partial_pressure_fractions: dict[str, xr.DataArray] = {
@@ -203,7 +201,7 @@ if __name__ == "__main__":
     molecular_partial_pressure_fractions_dataset: xr.Dataset = xr.Dataset(
         data_vars=molecular_partial_pressure_fractions,
         coords=shared_coordinates,
-        attrs=msgspec.structs.asdict(fiducial_molecular_metrics),
+        attrs=shared_molecular_attrs,
     )
 
     vertical_dataset: xr.Dataset = xr.Dataset(
@@ -236,7 +234,7 @@ if __name__ == "__main__":
     molecular_number_densities_dataset: xr.Dataset = xr.Dataset(
         data_vars=molecular_number_densities,
         coords=shared_coordinates,
-        attrs=msgspec.structs.asdict(fiducial_molecular_metrics),
+        attrs=shared_molecular_attrs,
     )
 
     molecular_mass_densities: dict[str, xr.DataArray] = {
@@ -253,7 +251,7 @@ if __name__ == "__main__":
     molecular_mass_densities_dataset: xr.Dataset = xr.Dataset(
         data_vars=molecular_mass_densities,
         coords=shared_coordinates,
-        attrs=msgspec.structs.asdict(fiducial_molecular_metrics),
+        attrs=shared_molecular_attrs,
     )
 
     vertical_datatree_structure: dict[str, xr.Dataset] = {
@@ -264,8 +262,37 @@ if __name__ == "__main__":
         "./molecular_inputs/mass_densities": molecular_mass_densities_dataset,
     }
 
-    vertical_datatree: xr.DataTree = xr.DataTree.from_dict(vertical_datatree_structure)
-    vertical_datatree.to_netcdf(data_structure_directory / "test_vertical_structure.nc")
+    return xr.DataTree.from_dict(vertical_datatree_structure)
+
+
+if __name__ == "__main__":
+    model_directory_label: str = "test_Phillips"
+
+    current_directory: Path = Path(__file__).parent
+    user_directory: Path = current_directory / "user"
+    model_directory: Path = user_directory / f"{model_directory_label}_model"
+    intermediate_output_directory: Path = model_directory / "intermediate_outputs"
+    serial_output_directory: Path = model_directory / "serial_outputs"
+
+    model_case_name: str = import_model_id(
+        model_directory_label=model_directory_label, parent_directory="user"
+    )
+    user_vertical_inputs: UserVerticalModelInputs = import_user_vertical_inputs(
+        model_directory_label=model_directory_label, parent_directory="user"
+    )
+
+    vertical_datatree: xr.DataTree = compile_comprehensive_vertical_structure(
+        user_vertical_inputs
+    )
+    vertical_datatree.to_netcdf(
+        intermediate_output_directory / f"{model_case_name}_vertical_structure.nc"
+    )
+
+    # Pull apart pieces and serialize, as a test.
+    vertical_dataset: xr.Dataset = vertical_datatree["vertical_structure"].to_dataset()
+    molecular_number_densities_dataset: xr.Dataset = vertical_datatree[
+        "molecular_inputs"
+    ]["number_densities"].to_dataset()
 
     vertical_as_dict: dict = vertical_dataset.to_dict()
     altitude_as_dict: dict = vertical_dataset.altitude.to_dict()
@@ -274,11 +301,17 @@ if __name__ == "__main__":
     msg_altitude: XarrayDataArray = XarrayDataArray(**altitude_as_dict)
     msg_vertical: XarrayDataset = XarrayDataset(**vertical_as_dict)
 
-    with open(data_structure_directory / "test_altitude.toml", "wb") as file:
+    with open(
+        serial_output_directory / f"{model_case_name}_altitude.toml", "wb"
+    ) as file:
         file.write(msgspec.toml.encode(msg_altitude))
 
-    with open(data_structure_directory / "test_vertical.toml", "wb") as file:
+    with open(
+        serial_output_directory / f"{model_case_name}_vertical.toml", "wb"
+    ) as file:
         file.write(msgspec.toml.encode(msg_vertical))
 
-    with open(data_structure_directory / "test_number_density.toml", "wb") as file:
+    with open(
+        serial_output_directory / f"{model_case_name}_number_density.toml", "wb"
+    ) as file:
         file.write(msgspec.toml.encode(number_density_as_dict))
