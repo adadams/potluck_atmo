@@ -2,7 +2,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from functools import partial, reduce, wraps
 from inspect import signature
-from typing import Any, NamedTuple, Protocol
+from pathlib import Path
+from typing import Any, NamedTuple, Protocol, TypeAlias
 
 import xarray as xr
 
@@ -190,3 +191,38 @@ def map_function_arguments_to_dataset_variables(
 
 def rename_and_unitize(data_array: xr.DataArray, name: str, units: str) -> xr.DataArray:
     return data_array.rename(name).assign_attrs(units=units)
+
+
+XarrayOutputs: TypeAlias = dict[str, xr.DataArray | xr.Dataset]
+
+
+class ProducesXarrayOutputs(Protocol):
+    def __call__(self, *args, **kwargs) -> XarrayOutputs: ...
+
+
+def save_xarray_outputs_to_file(
+    function: ProducesXarrayOutputs,
+) -> ProducesXarrayOutputs:
+    @wraps(function)
+    def wrapper(
+        *args,
+        output_directory: Path = Path.cwd(),
+        filename_prefix: str = "output",
+        **kwargs,
+    ):
+        def make_output_filepath(case_name: str) -> str:
+            return str(output_directory / f"{filename_prefix}_{case_name}.nc")
+
+        result: XarrayOutputs = function(*args, **kwargs)
+
+        for dataset_name, dataset in result.items():
+            output_dataset: xr.Dataset = (
+                dataset
+                if isinstance(dataset, xr.Dataset)
+                else dataset.to_dataset(name=dataset_name)
+            )
+            output_dataset.to_netcdf(make_output_filepath(case_name=dataset_name))
+
+        return result
+
+    return wrapper

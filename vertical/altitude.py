@@ -14,9 +14,9 @@ def convert_pressure_coordinate_by_level_to_by_layer(
     if "pressure" not in dataset.coords:
         raise ValueError("Dataset must have pressure as a coordinate.")
 
-    midlayer_pressures: np.ndarray = (
-        dataset.pressure.to_numpy()[1:] + dataset.pressure.to_numpy()[:-1]
-    ) / 2
+    midlayer_pressures: np.ndarray = np.sqrt(
+        dataset.pressure.to_numpy()[1:] * dataset.pressure.to_numpy()[:-1]
+    )
 
     return xr.DataArray(
         data=midlayer_pressures,
@@ -55,12 +55,15 @@ def calculate_altitude_profile(
     planet_radius_in_cm: float,
     planet_mass_in_g: float,
 ) -> NDArray[np.float64]:
-    log_pressure_differences: NDArray[np.float64] = (
+    log10_pressure_differences: NDArray[np.float64] = (
         log_pressures_in_cgs[1:] - log_pressures_in_cgs[:-1]
+    )
+    log_pressure_differences: NDArray[np.float64] = (
+        np.log(10) * log10_pressure_differences
     )
 
     altitudes: NDArray[np.float64] = np.empty_like(log_pressures_in_cgs)
-    altitudes[-1] = 0.0
+    altitudes[-1] = 0
 
     for i, (
         log_pressure_difference,

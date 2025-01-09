@@ -1,0 +1,5 @@
+What is "Potluck"?
+
+Potluck is an experimental project that models atmospheres in 1-D. It will likely NEVER do anything more sophisticated than any number of other publicly available, well-maintained, and tested codes for modeling and retrieving exoplanet atmospheres. This is not its primary purpose.
+
+This code mainly exists to help me, as a scientist, bring the act of planning, testing, and refining experiments much closer to the act of using and adapting software to evaluate our models and test hypotheses. I often find what limits me day-to-day in my job as an exoplanet scientist is difficulty in organizing my thoughts and plans --- there's a lot going on! Maybe this happens to not be a major limitation for you, which is fine. But maybe some of the ideas in how this code is designed and implemented may help you if that sounds familiar.

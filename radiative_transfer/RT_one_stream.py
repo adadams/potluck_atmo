@@ -71,7 +71,7 @@ def calculate_spectral_intensity_at_surface(
     )
 
     spectral_intensity_by_layer: NDArray[np.float64] = thermal_intensity * (
-        previous_attenuation_factors_by_layer - attenutation_factors_by_layer
+        attenutation_factors_by_layer - previous_attenuation_factors_by_layer
     )
 
     spectral_intensity_at_surface_by_angle: NDArray[np.float64] = np.sum(

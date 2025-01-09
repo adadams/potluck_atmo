@@ -11,3 +11,4 @@ user/test_data_structures/
 user/test_2M2236b_G395H/
 
 check_xarray_files.py
+user/test_*

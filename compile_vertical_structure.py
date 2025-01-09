@@ -119,7 +119,7 @@ def compile_comprehensive_vertical_structure(
     )
 
     altitudes_in_cm: NDArray[np.float64] = calculate_altitude_profile(
-        log_pressures_in_cgs=user_vertical_inputs.log_pressures_by_level.to_numpy(),
+        log_pressures_in_cgs=user_vertical_inputs.log_pressures_by_level,
         temperatures_in_K=user_vertical_inputs.temperatures_by_level,
         mean_molecular_weights_in_g=mean_molecular_weights_in_g,
         planet_radius_in_cm=user_vertical_inputs.planet_radius_in_cm,
@@ -265,29 +265,14 @@ def compile_comprehensive_vertical_structure(
     return xr.DataTree.from_dict(vertical_datatree_structure)
 
 
-if __name__ == "__main__":
-    model_directory_label: str = "test_Phillips"
-
-    current_directory: Path = Path(__file__).parent
-    user_directory: Path = current_directory / "user"
-    model_directory: Path = user_directory / f"{model_directory_label}_model"
-    intermediate_output_directory: Path = model_directory / "intermediate_outputs"
-    serial_output_directory: Path = model_directory / "serial_outputs"
-
+def test_serialized_vertical_outputs(
+    vertical_datatree: xr.DataTree,
+    model_directory_label: str,
+    serial_output_directory: Path,
+) -> None:
     model_case_name: str = import_model_id(
         model_directory_label=model_directory_label, parent_directory="user"
     )
-    user_vertical_inputs: UserVerticalModelInputs = import_user_vertical_inputs(
-        model_directory_label=model_directory_label, parent_directory="user"
-    )
-
-    vertical_datatree: xr.DataTree = compile_comprehensive_vertical_structure(
-        user_vertical_inputs
-    )
-    vertical_datatree.to_netcdf(
-        intermediate_output_directory / f"{model_case_name}_vertical_structure.nc"
-    )
-
     # Pull apart pieces and serialize, as a test.
     vertical_dataset: xr.Dataset = vertical_datatree["vertical_structure"].to_dataset()
     molecular_number_densities_dataset: xr.Dataset = vertical_datatree[
@@ -315,3 +300,33 @@ if __name__ == "__main__":
         serial_output_directory / f"{model_case_name}_number_density.toml", "wb"
     ) as file:
         file.write(msgspec.toml.encode(number_density_as_dict))
+
+
+if __name__ == "__main__":
+    model_directory_label: str = "example_isothermal"
+
+    current_directory: Path = Path(__file__).parent
+    user_directory: Path = current_directory / "user"
+    model_directory: Path = user_directory / f"{model_directory_label}_model"
+    intermediate_output_directory: Path = model_directory / "intermediate_outputs"
+    serial_output_directory: Path = model_directory / "serial_outputs"
+
+    model_case_name: str = import_model_id(
+        model_directory_label=model_directory_label, parent_directory="user"
+    )
+    user_vertical_inputs: UserVerticalModelInputs = import_user_vertical_inputs(
+        model_directory_label=model_directory_label, parent_directory="user"
+    )
+
+    vertical_datatree: xr.DataTree = compile_comprehensive_vertical_structure(
+        user_vertical_inputs
+    )
+    vertical_datatree.to_netcdf(
+        intermediate_output_directory / f"{model_case_name}_vertical_structure.nc"
+    )
+
+    test_serialized_vertical_outputs(
+        vertical_datatree=vertical_datatree,
+        model_directory_label=model_directory_label,
+        serial_output_directory=serial_output_directory,
+    )

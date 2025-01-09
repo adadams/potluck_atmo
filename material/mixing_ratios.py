@@ -22,6 +22,12 @@ class MixingRatioPipeline(Protocol):
     def __call__(self, *args, **kwargs) -> MixingRatios: ...
 
 
+def add_filler_to_mixing_ratios(
+    mixing_ratios: dict[str, float], filler_species: str = "h2"
+) -> dict[str, float]:
+    return mixing_ratios | {filler_species: 1 - np.sum(list(mixing_ratios.values()))}
+
+
 def log_abundances_to_mixing_ratios(
     log_abundances: dict[str, float], filler_species: str = "h2"
 ) -> dict[str, float]:
@@ -29,9 +35,7 @@ def log_abundances_to_mixing_ratios(
         species: 10 ** log_abundances[species] for species in log_abundances
     }
 
-    return abundances_without_filler | {
-        filler_species: 1 - np.sum(list(abundances_without_filler.values()))
-    }
+    return add_filler_to_mixing_ratios(abundances_without_filler, filler_species)
 
 
 def uniform_log_abundances_to_log_abundances_by_level(

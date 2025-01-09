@@ -1,12 +1,12 @@
-from typing import Annotated, Literal, Optional, Type, TypeAlias
+from typing import Annotated, Literal, Optional, TypeAlias
 
 import msgspec
 import xarray as xr
 
 # from nptyping import DataFrame, Float, NDArray, Shape, Structure
 
-type XarrayDimension = tuple[str, ...]
-type XarrayData = list[float]
+XarrayDimension: TypeAlias = tuple[str, ...]
+XarrayData: TypeAlias = list[float]
 
 """
 Ideas to jot down here for easy reference:
@@ -14,10 +14,18 @@ xarray dataset print-outs (reprs) already show
 shape and structure information under "dimensions"
 that look a lot like they could be annotations in
 something like nptyping.
+
+
+N = TypeVar("N", tuple[int, ...])
+
+
+class PreservesNumberofElements(Protocol):
+    def __call__(
+        xarray_data: XarrayData[XarrayDimension[N]],
+    ) -> XarrayData[XarrayDimension[N]]: ...
 """
 
-
-BaseUnits: Type = Literal["[mass]", "[time]", "[length]", "[temperature]"]
+BaseUnits: TypeAlias = Literal["[mass]", "[time]", "[length]", "[temperature]"]
 BaseUnitType: TypeAlias = Annotated[str, BaseUnits]
 UnitType: TypeAlias = tuple[tuple[BaseUnitType, int]]
 

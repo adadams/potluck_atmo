@@ -41,6 +41,8 @@ def calculate_thermal_intensity_by_layer(
     thermal_intensity = (
         thermal_intensity_bin_edges[:, :-1] + thermal_intensity_bin_edges[:, 1:]
     ) / 2
+    # thermal_intensity = thermal_intensity_bin_edges[:, :-1]
+
     # change across each layer bin
     delta_thermal_intensity = (
         thermal_intensity_bin_edges[:, 1:] - thermal_intensity_bin_edges[:, :-1]

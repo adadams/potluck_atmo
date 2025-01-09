@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 
-from wavelength import get_wavelengths_from_wavelength_bins
+from spectrum.wavelength import get_wavelengths_from_wavelength_bins
 
 
 def convert_APOLLO_data_to_dataset(filepath: Path) -> xr.Dataset:

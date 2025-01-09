@@ -8,7 +8,7 @@ import numpy as np
 import xarray as xr
 
 from material.gases.sanity_checks import check_if_all_headers_match
-from wavelength import (
+from spectrum.wavelength import (
     get_number_of_wavelengths,
     get_wavelengths_from_number_of_elements_and_resolution,
 )
@@ -121,7 +121,7 @@ if __name__ == "__main__":
     if not Path.exists(test_opacity_directory):
         raise ValueError(f"Directory {test_opacity_directory} does not exist.")
 
-    opacity_catalog_name: str = "jwst50k"
+    opacity_catalog_name: str = "wide-jwst"
 
     opacity_filepaths: dict[str, Path] = {
         filepath[filepath.rfind("/") + 1 : filepath.index(".")]: Path(filepath)

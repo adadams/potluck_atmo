@@ -1,9 +1,18 @@
+General data structures:
+  ☐ Writing down a general consistent pattern for how to decorate/dimensionalize/unitize functions. Some ideas:
+    - Can we use type annotations to notate the sort of structure that should go in, without prescribing it as a "Dimensionalize" decorator does?
+    - Idea 2
+
+Input file formats:
+  ☐ Make the "*forward_model_inputs.py" less "active":
+    ☐ Write a script to generate a default version from template. Less Python code, more plaintext.
 
 Xarray structures:
   ☐ Unit handling, not just dimensionality handling!
   ☐ Some numpy functions will break the continuity of xarray apply_ufunc (for example, slicing), so we should think carefully about how our metadata could "recover" that information as well as possible.
-  ☐ Dimensionalize doesn't work (yet) with non-dimensionalized arguments, like floats.
+  ☐ Dimensionalize doesn't work (yet) with non-dimensionalized arguments, like floats. (In "apply_ufunc", you can use an empty string ("") to indicate a non-dimensional argument.) 
 
 Test RT scheme:
   ✔ Changing the maximum exponential cutoff (MAXIMUM_EXP_FLOAT in RT_Toon1989.py) affects how the (seemingly wrong) spectrum looks. Increasing it to effectively no cutoff reduces the anomalous alkali spike (where it should be an absorption feature). Turning the exponent lower ends up reaching the no-Rayleigh case as a limit. Maybe there's some competing exponents at high values? @done(24-11-19 18:22)
   ✔ There might be a wavenumber/wavelength problem with the gas optical depths, or an array being reversed. @done(24-11-19 18:22)
+  ☐ We need to do a very stripped-back test of each RT scheme. Fully isothermal, H2-only atmosphere, compare with both APOLLO and PICASO.
