@@ -5,7 +5,7 @@ import msgspec
 import xarray as xr
 
 from material.absorbing.from_crosssections import (
-    crosssections_to_attenutation_coefficients,
+    crosssections_to_attenuation_coefficients,
 )
 
 current_directory: Path = Path(__file__).parent
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     )
 
     gas_absorption_coefficients = (
-        crosssections_to_attenutation_coefficients(
+        crosssections_to_attenuation_coefficients(
             crosssection_catalog_dataset_interpolated_to_model,
             test_number_densities_dataarray,
         )

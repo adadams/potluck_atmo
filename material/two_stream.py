@@ -4,7 +4,7 @@ import xarray as xr
 
 from material.absorbing.from_crosssections import (
     attenuation_coefficients_to_optical_depths,
-    crosssections_to_attenutation_coefficients,
+    crosssections_to_attenuation_coefficients,
 )
 from material.scattering.rayleigh import calculate_two_stream_scattering_components
 from material.scattering.two_stream import calculate_two_stream_scattering_parameters
@@ -60,7 +60,7 @@ def compile_composite_two_stream_parameters(
         )
     )
 
-    absorption_coefficients: xr.Dataset = crosssections_to_attenutation_coefficients(
+    absorption_coefficients: xr.Dataset = crosssections_to_attenuation_coefficients(
         crosssections, number_density
     )
 
@@ -83,8 +83,8 @@ def compile_composite_two_stream_parameters(
     )
 
     return compile_two_stream_parameters(
-        cumulative_forward_scattering_coefficients,
-        cumulative_backward_scattering_coefficients,
-        cumulative_absorption_coefficients,
-        path_lengths,
+        forward_scattering_coefficients=cumulative_forward_scattering_coefficients,
+        backward_scattering_coefficients=cumulative_backward_scattering_coefficients,
+        absorption_coefficients=cumulative_absorption_coefficients,
+        path_length=path_lengths,
     )

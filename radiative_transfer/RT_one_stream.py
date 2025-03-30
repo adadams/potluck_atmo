@@ -62,16 +62,17 @@ def calculate_spectral_intensity_at_surface(
     attenutation_factors_by_layer: NDArray[np.float64] = np.exp(
         -cumulative_optical_depth_by_layer / stream_cosine_angles
     )
+
     previous_attenuation_factors_by_layer: NDArray[np.float64] = np.concatenate(
         (
-            np.zeros([*attenutation_factors_by_layer.shape[:-1], 1]),
+            np.ones([*attenutation_factors_by_layer.shape[:-1], 1]),  # exp(0) = 1
             attenutation_factors_by_layer[..., :-1],
         ),
         axis=-1,
     )
 
     spectral_intensity_by_layer: NDArray[np.float64] = thermal_intensity * (
-        attenutation_factors_by_layer - previous_attenuation_factors_by_layer
+        previous_attenuation_factors_by_layer - attenutation_factors_by_layer
     )
 
     spectral_intensity_at_surface_by_angle: NDArray[np.float64] = np.sum(

@@ -54,7 +54,7 @@ def resample_spectral_quantity_to_new_wavelengths(
     fwhm: Optional[float] = None,
 ) -> xr.Dataset:
     if fwhm is None:
-        fwhm = 3.0 * (new_wavelengths[1] - new_wavelengths[0])
+        fwhm = 3.0 * (new_wavelengths[-1] - new_wavelengths[-2])
 
     return convolve_and_resample_by_spectres(
         new_wavelengths, model_wavelengths, model_spectral_quantity, fwhm

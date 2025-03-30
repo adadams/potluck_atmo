@@ -1,7 +1,7 @@
 General data structures:
   ☐ Writing down a general consistent pattern for how to decorate/dimensionalize/unitize functions. Some ideas:
     - Can we use type annotations to notate the sort of structure that should go in, without prescribing it as a "Dimensionalize" decorator does?
-    - Idea 2
+    - Saving intermediate outputs as xarray datasets to user folders. If the functions are doing this saving, they have to have some knowledge of these paths to save the files. Should they? Should this be a wrapper for saving xarray outputs?
 
 Input file formats:
   ☐ Make the "*forward_model_inputs.py" less "active":

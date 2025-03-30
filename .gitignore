@@ -12,3 +12,13 @@ user/test_2M2236b_G395H/
 
 check_xarray_files.py
 user/test_*
+*.pdf
+*.nc
+test_opacity_tables.py
+material/gases/reference_data/picaso_lupu_temperature_levels.py
+compare_nearly_isothermal_spectra.py
+compile_vertical_structure_for_Wills_model.py
+calculate_Wills_simplified_Ross458c_model.py
+calculate_test_2M2236b_model.py
+calculate_ATMO_model.py
+compare_isothermal_spectra.py

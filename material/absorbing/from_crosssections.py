@@ -12,7 +12,7 @@ from xarray_serialization import PressureType, SpeciesType, WavelengthType
     ),
     result_dimensions=((WavelengthType, PressureType, SpeciesType),),
 )
-def crosssections_to_attenutation_coefficients(
+def crosssections_to_attenuation_coefficients(
     crosssections: NDArray[np.float64],
     number_density: NDArray[np.float64],
 ) -> NDArray[np.float64]:

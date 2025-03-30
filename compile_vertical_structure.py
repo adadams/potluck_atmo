@@ -24,6 +24,7 @@ from vertical.altitude import (
     calculate_altitude_profile,
     convert_dataset_by_pressure_levels_to_pressure_layers,
 )
+from xarray_functional_wrappers import save_xarray_outputs_to_file
 from xarray_serialization import XarrayDataArray, XarrayDataset
 
 current_directory: Path = Path(__file__).parent
@@ -34,6 +35,7 @@ class ForwardModelXarrayInputs(NamedTuple):
     by_layer: xr.Dataset
 
 
+@save_xarray_outputs_to_file
 def compile_vertical_structure_for_forward_model(
     user_vertical_inputs: UserVerticalModelInputs,
 ) -> xr.Dataset:
@@ -71,7 +73,7 @@ def compile_vertical_structure_for_forward_model(
             mixing_ratios_by_level=user_vertical_inputs.mixing_ratios_by_level,
             molecular_weights_by_level=molecular_weights_by_level,
             mean_molecular_weight_by_level=mean_molecular_weight_by_level,
-            pressure_in_cgs=user_vertical_inputs.pressures_by_level,
+            pressure_in_cgs=user_vertical_inputs.pressures_by_level * BAR_TO_BARYE,
             temperatures_in_K=user_vertical_inputs.temperatures_by_level,
         ).items()
     }
@@ -303,7 +305,7 @@ def test_serialized_vertical_outputs(
 
 
 if __name__ == "__main__":
-    model_directory_label: str = "example_isothermal"
+    model_directory_label: str = "test_isothermal"
 
     current_directory: Path = Path(__file__).parent
     user_directory: Path = current_directory / "user"

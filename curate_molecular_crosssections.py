@@ -1,3 +1,4 @@
+import sys
 from collections.abc import Mapping
 from glob import glob
 from pathlib import Path
@@ -7,6 +8,9 @@ import msgspec
 import numpy as np
 import xarray as xr
 
+from material.gases.reference_data.picaso_lupu_temperature_levels import (
+    PICASO_TP_LEVELS,
+)
 from material.gases.sanity_checks import check_if_all_headers_match
 from spectrum.wavelength import (
     get_number_of_wavelengths,
@@ -56,7 +60,7 @@ molecular_metadata: dict[str, MolecularCrossSectionMetadata] = {
 
 
 def get_file_headers(filepaths: Mapping[str, Path]) -> tuple[tuple[Any, ...], ...]:
-    file_headers = []
+    file_headers = {}
     for species, filepath in filepaths.items():
         with open(filepath, "r") as file:
             header_entries = file.readline().split()
@@ -72,9 +76,9 @@ def get_file_headers(filepaths: Mapping[str, Path]) -> tuple[tuple[Any, ...], ..
                     for entry in header_entries
                 ]
             )
-        file_headers.append(CrossSectionTableHeader(*header))
+        file_headers[species] = CrossSectionTableHeader(*header)
 
-    return tuple(file_headers)
+    return file_headers
 
 
 def load_crosssections_into_array(
@@ -96,12 +100,17 @@ def load_crosssections_into_array(
         maximum_value: float = maximum_value,
     ):
         original_array = np.loadtxt(filepath, **loadtxt_kwargs)
+        print(f"{filepath=}, {original_array.shape=}")
 
-        return original_array.clip(minimum_value, maximum_value).reshape(
-            number_of_pressure_layers,
-            number_of_temperatures,
-            number_of_spectral_elements,
-        )
+        return (
+            original_array.clip(minimum_value, maximum_value)
+            .reshape(
+                number_of_temperatures,
+                number_of_pressure_layers,
+                number_of_spectral_elements,
+            )
+            .swapaxes(0, 1)
+        )  # P T W is the ORIGINAL
 
     return {
         species: load_array(filepath)
@@ -111,7 +120,7 @@ def load_crosssections_into_array(
 
 
 if __name__ == "__main__":
-    research_data_storage_directory: Path = Path("/Volumes/ResearchStorage")
+    research_data_storage_directory: Path = Path("/Volumes/Orange")
     # research_data_storage_directory: Path = Path("/home/Research")
 
     test_opacity_directory: Path = (
@@ -121,41 +130,61 @@ if __name__ == "__main__":
     if not Path.exists(test_opacity_directory):
         raise ValueError(f"Directory {test_opacity_directory} does not exist.")
 
-    opacity_catalog_name: str = "wide-jwst"
+    opacity_catalog_name: str = "nir"
 
-    opacity_filepaths: dict[str, Path] = {
+    all_opacity_filepaths: dict[str, Path] = {
         filepath[filepath.rfind("/") + 1 : filepath.index(".")]: Path(filepath)
         for filepath in sorted(
             glob(f"{test_opacity_directory}/*.{opacity_catalog_name}.dat")
         )
     }
 
-    opacity_file_headers: tuple[CrossSectionTableHeader] = get_file_headers(
-        opacity_filepaths
+    opacity_file_header_dict: dict[str, CrossSectionTableHeader] = get_file_headers(
+        all_opacity_filepaths
     )
+
+    opacity_file_headers: tuple[CrossSectionTableHeader] = tuple(
+        opacity_file_header_dict.values()
+    )
+
+    opacity_filepaths: dict[str, Path] = {
+        species: filepath
+        for species, filepath in all_opacity_filepaths.items()
+        if species in opacity_file_header_dict
+    }
 
     check_if_all_headers_match(opacity_file_headers)
     fiducial_opacity_file_header: CrossSectionTableHeader = opacity_file_headers[-1]
     print(f"{fiducial_opacity_file_header=}")
-
-    opacity_data: dict[str, np.ndarray] = load_crosssections_into_array(
-        fiducial_opacity_file_header.number_of_pressure_layers,
-        fiducial_opacity_file_header.number_of_temperatures,
-        fiducial_opacity_file_header.number_of_spectral_elements,
-        opacity_filepaths,
-    )
 
     log_pressures: np.ndarray = np.linspace(
         fiducial_opacity_file_header.minimum_log_pressure,
         fiducial_opacity_file_header.maximum_log_pressure,
         fiducial_opacity_file_header.number_of_pressure_layers,
     )
+    print(f"{log_pressures=}")
 
+    # log_temperatures: np.ndarray = np.log10(PICASO_TP_LEVELS)
     log_temperatures: np.ndarray = np.linspace(
         fiducial_opacity_file_header.minimum_log_temperature,
         fiducial_opacity_file_header.maximum_log_temperature,
         fiducial_opacity_file_header.number_of_temperatures,
     )
+    print(f"{10**log_temperatures=}")
+
+    deltalogt = (fiducial_opacity_file_header.number_of_temperatures - 1) / (
+        fiducial_opacity_file_header.maximum_log_temperature
+        - fiducial_opacity_file_header.minimum_log_temperature
+    )
+    temps = 10**fiducial_opacity_file_header.minimum_log_temperature * np.power(
+        10,
+        np.arange(0, fiducial_opacity_file_header.number_of_temperatures) / deltalogt,
+    )
+    print(f"{temps=}")
+
+    # for(int n=0; n<ntemp; n++){
+    # logtemp[n] = log10(tmin*pow(10,n/deltalogt));
+    # }
 
     number_of_wavelengths: int = get_number_of_wavelengths(
         fiducial_opacity_file_header.minimum_wavelength,
@@ -164,8 +193,16 @@ if __name__ == "__main__":
     )
     wavelengths: np.ndarray = get_wavelengths_from_number_of_elements_and_resolution(
         fiducial_opacity_file_header.minimum_wavelength,
-        number_of_wavelengths - 1,
+        number_of_wavelengths,
         fiducial_opacity_file_header.effective_resolution,
+    )
+    sys.exit()
+
+    opacity_data: dict[str, np.ndarray] = load_crosssections_into_array(
+        fiducial_opacity_file_header.number_of_pressure_layers,
+        fiducial_opacity_file_header.number_of_temperatures,
+        fiducial_opacity_file_header.number_of_spectral_elements,
+        opacity_filepaths,
     )
 
     shared_coordinates: dict[str, np.ndarray] = {
@@ -196,4 +233,6 @@ if __name__ == "__main__":
         attrs={"opacity_catalog": opacity_catalog_name},
     )
 
-    species_dataset.to_netcdf(test_opacity_directory / f"{opacity_catalog_name}.nc")
+    species_dataset.to_netcdf(
+        test_opacity_directory / f"{opacity_catalog_name}_test.nc"
+    )

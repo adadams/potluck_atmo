@@ -7,16 +7,23 @@ def curate_crosssection_catalog(
     pressures_by_layer: xr.DataArray,
     species_present_in_model: list[str],
 ):
-    return (
-        (
-            crosssection_catalog_dataset.interp(
-                temperature=temperatures_by_layer,
-                pressure=pressures_by_layer,
-            )
-        )
-        .get(species_present_in_model)
-        .to_array(dim="species", name="crosssections")
+    interpolated_crosssection_catalog: xr.Dataset = crosssection_catalog_dataset.interp(
+        temperature=temperatures_by_layer,
+        pressure=pressures_by_layer,
     )
+
+    interpolated_crosssection_catalog_with_model_species: xr.Dataset = (
+        interpolated_crosssection_catalog.get(species_present_in_model)
+    )
+
+    interpolated_crosssection_catalog_as_dataarray: xr.DataArray = (
+        interpolated_crosssection_catalog_with_model_species.to_array(
+            dim="species", name="crosssections"
+        )
+    )
+    print(f"{interpolated_crosssection_catalog_as_dataarray=}")
+
+    return interpolated_crosssection_catalog_as_dataarray
 
 
 def compile_crosssection_data_for_forward_model(

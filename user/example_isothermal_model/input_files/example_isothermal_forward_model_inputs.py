@@ -18,20 +18,18 @@ user_directory: Path = model_directory.parent
 potluck_directory: Path = user_directory.parent
 
 ################### FORWARD MODEL DATA ###################
-model_directory_label: str = (model_directory.name)[
-    : model_directory.name.find("_model")
-]
+model_directory_label: str = "example_isothermal"
 
 opacity_catalog: str = "wide-jwst"
 
-opacity_data_directory: Path = Path("/home/Research") / "Opacities_0v10" / "gases"
+opacity_data_directory: Path = Path("/Volumes/Orange") / "Opacities_0v10" / "gases"
 
 catalog_filepath: Path = opacity_data_directory / f"{opacity_catalog}.nc"
 crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(catalog_filepath)
 
 reference_model_filepath: Path = model_directory / "reference_data_wavelengths.nc"
 reference_model: xr.Dataset = xr.open_dataset(reference_model_filepath)
-reference_model_wavelengths: xr.DataArray = reference_model.reference_wavelengths
+reference_model_wavelengths: xr.DataArray = reference_model.wavelength
 
 
 model_case_name: str = import_model_id(

@@ -1,4 +1,4 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import partial, reduce, wraps
 from inspect import signature
@@ -193,7 +193,7 @@ def rename_and_unitize(data_array: xr.DataArray, name: str, units: str) -> xr.Da
     return data_array.rename(name).assign_attrs(units=units)
 
 
-XarrayOutputs: TypeAlias = dict[str, xr.DataArray | xr.Dataset]
+XarrayOutputs: TypeAlias = Mapping[str, xr.DataArray | xr.Dataset]
 
 
 class ProducesXarrayOutputs(Protocol):
@@ -215,7 +215,14 @@ def save_xarray_outputs_to_file(
 
         result: XarrayOutputs = function(*args, **kwargs)
 
-        for dataset_name, dataset in result.items():
+        if isinstance(result, xr.Dataset):
+            result_as_dict = {"output": result}
+        elif isinstance(result, dict):
+            result_as_dict = result
+        elif isinstance(result, tuple):
+            result_as_dict = result._asdict()
+
+        for dataset_name, dataset in result_as_dict.items():
             output_dataset: xr.Dataset = (
                 dataset
                 if isinstance(dataset, xr.Dataset)

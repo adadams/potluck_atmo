@@ -84,8 +84,8 @@ def make_default_input_file_templates(
 
 
 if __name__ == "__main__":
-    model_directory_label: str = "test_almost_isothermal"
-    model_case_name: str = "isothermal_1300K_1ppt_H20_1ppt_CO"
+    model_directory_label: str = "test_Wills"
+    model_case_name: str = "Wills_Ross458c_simplified"
 
     make_default_model_directory(model_directory_label=model_directory_label)
     make_default_input_file_templates(
