@@ -1,10 +1,8 @@
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from typing import Protocol, TypeAlias, Union
 
 import numpy as np
 from numpy.typing import NDArray
-
-from basic_functional_tools import compose
 
 MixingRatios: TypeAlias = Union[Mapping[str, float], Mapping[str, NDArray[np.float64]]]
 
@@ -38,17 +36,23 @@ def log_abundances_to_mixing_ratios(
     return add_filler_to_mixing_ratios(abundances_without_filler, filler_species)
 
 
-def uniform_log_abundances_to_log_abundances_by_level(
-    uniform_log_abundances: dict[str, float], number_of_pressure_levels: int
+def uniform_values_to_values_by_level(
+    uniform_values: dict[str, float], number_of_pressure_levels: int
 ) -> dict[str, np.ndarray]:
     return {
-        species: np.ones(number_of_pressure_levels) * log_abundance
-        for species, log_abundance in uniform_log_abundances.items()
+        species: np.ones(number_of_pressure_levels) * value
+        for species, value in uniform_values.items()
     }
 
 
-uniform_log_mixing_ratios: Callable[
-    [dict[str, float]], dict[str, NDArray[np.float64]]
-] = compose(
-    uniform_log_abundances_to_log_abundances_by_level, log_abundances_to_mixing_ratios
-)
+def uniform_log_mixing_ratios(
+    uniform_log_abundances: dict[str, float],
+    number_of_pressure_levels: int,
+    filler_species: str = "h2",
+) -> dict[str, NDArray[np.float64]]:
+    return uniform_values_to_values_by_level(
+        uniform_values=log_abundances_to_mixing_ratios(
+            log_abundances=uniform_log_abundances, filler_species=filler_species
+        ),
+        number_of_pressure_levels=number_of_pressure_levels,
+    )

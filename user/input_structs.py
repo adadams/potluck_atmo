@@ -16,5 +16,6 @@ class UserForwardModelInputs(NamedTuple):
     vertical_inputs: UserVerticalModelInputs
     crosssection_catalog: xr.Dataset
     output_wavelengths: xr.DataArray
-    path_lengths_by_level: xr.DataArray
+    path_lengths_by_layer: xr.DataArray
+    altitudes_by_layer: xr.DataArray
     distance_to_system_in_cm: float

@@ -7,7 +7,7 @@ from basic_functional_tools import interleave
 from xarray_functional_wrappers import Dimensionalize
 from xarray_serialization import PressureType, WavelengthType
 
-MAXIMUM_EXP_FLOAT: Final[float] = 35.0
+MAXIMUM_EXP_FLOAT: Final[float] = 10.0
 
 STREAM_COSINE_ANGLES: Final[NDArray[np.float64]] = np.array(
     [
@@ -178,16 +178,20 @@ def DSolver_subroutine(cp, cpm1, cm, cmm1, ep, btop, bottom, gama, rsf=0):
     e4 = gama * ep - 1 / ep
 
     gama_top_layer = gama[*top_layer]
-    af_top = np.zeros_like(gama_top_layer)
-    bf_top = gama_top_layer + 1
-    cf_top = gama_top_layer - 1
-    df_top = btop - cmm1[*top_layer]
+    af_top: np.ndarray = np.zeros_like(gama_top_layer)
+    bf_top: np.ndarray = gama_top_layer + 1
+    cf_top: np.ndarray = gama_top_layer - 1
+    df_top: np.ndarray = btop - cmm1[*top_layer]
 
     # odd indices
-    odd_afs = (e1[*upper_edges] + e3[*upper_edges]) * (gama[*lower_edges] - 1)
-    odd_bfs = (e2[*upper_edges] + e4[*upper_edges]) * (gama[*lower_edges] - 1)
-    odd_cfs = 2 * (1 - gama[*lower_edges] ** 2)
-    odd_dfs = (gama[*lower_edges] - 1) * (
+    odd_afs: np.ndarray = (e1[*upper_edges] + e3[*upper_edges]) * (
+        gama[*lower_edges] - 1
+    )
+    odd_bfs: np.ndarray = (e2[*upper_edges] + e4[*upper_edges]) * (
+        gama[*lower_edges] - 1
+    )
+    odd_cfs: np.ndarray = 2 * (1 - gama[*lower_edges] ** 2)
+    odd_dfs: np.ndarray = (gama[*lower_edges] - 1) * (
         (cpm1[*lower_edges] - cp[*upper_edges])
         + (cmm1[*lower_edges] - cm[*upper_edges])
     )

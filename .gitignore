@@ -11,6 +11,7 @@ user/test_data_structures/
 user/test_2M2236b_G395H/
 
 check_xarray_files.py
+user/R1b_*
 user/test_*
 *.pdf
 *.nc
@@ -22,3 +23,4 @@ calculate_Wills_simplified_Ross458c_model.py
 calculate_test_2M2236b_model.py
 calculate_ATMO_model.py
 compare_isothermal_spectra.py
+calculate_R1b_base_model.py

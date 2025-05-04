@@ -8,8 +8,9 @@ def curate_crosssection_catalog(
     species_present_in_model: list[str],
 ):
     interpolated_crosssection_catalog: xr.Dataset = crosssection_catalog_dataset.interp(
-        temperature=temperatures_by_layer,
         pressure=pressures_by_layer,
+        temperature=temperatures_by_layer,
+        method="linear"
     )
 
     interpolated_crosssection_catalog_with_model_species: xr.Dataset = (
@@ -21,7 +22,6 @@ def curate_crosssection_catalog(
             dim="species", name="crosssections"
         )
     )
-    print(f"{interpolated_crosssection_catalog_as_dataarray=}")
 
     return interpolated_crosssection_catalog_as_dataarray
 

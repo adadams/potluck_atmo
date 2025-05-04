@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 
 
 def compose(*functions: Sequence[Callable]) -> Callable:
-    return reduce(lambda f, g: lambda x: g(f(x)), functions)
+    return reduce(lambda f, g: lambda *x: g(f(*x)), functions)
 
 
 def interleave(

@@ -8,6 +8,7 @@ from material.gases.molecular_metrics import calculate_mean_molecular_weight
 from user.input_importers import import_model_id, import_user_vertical_inputs
 from user.input_structs import UserForwardModelInputs, UserVerticalModelInputs
 from vertical.altitude import (
+    altitudes_by_level_to_by_layer,
     altitudes_by_level_to_path_lengths,
     calculate_altitude_profile,
 )
@@ -74,15 +75,18 @@ altitudes_in_cm: xr.DataArray = xr.DataArray(
     attrs={"units": "cm"},
 )
 
-path_lengths_by_level: xr.DataArray = altitudes_by_level_to_path_lengths(
+path_lengths_by_layer: xr.DataArray = altitudes_by_level_to_path_lengths(
     altitudes_in_cm
 )
+
+altitudes_by_layer: xr.DataArray = altitudes_by_level_to_by_layer(altitudes_in_cm)
 
 user_forward_model_inputs: UserForwardModelInputs = UserForwardModelInputs(
     vertical_inputs=user_vertical_inputs,
     crosssection_catalog=crosssection_catalog_dataset,
     output_wavelengths=reference_model_wavelengths,
-    path_lengths_by_level=path_lengths_by_level,
+    path_lengths_by_layer=path_lengths_by_layer,
+    altitudes_by_layer=altitudes_by_layer,
     distance_to_system_in_cm=distance_to_system_in_cm,
 )
 ##########################################################

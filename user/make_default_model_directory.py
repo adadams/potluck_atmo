@@ -84,8 +84,8 @@ def make_default_input_file_templates(
 
 
 if __name__ == "__main__":
-    model_directory_label: str = "test_Wills"
-    model_case_name: str = "Wills_Ross458c_simplified"
+    model_directory_label: str = "R1b_retrieval"
+    model_case_name: str = "R1b"
 
     make_default_model_directory(model_directory_label=model_directory_label)
     make_default_input_file_templates(

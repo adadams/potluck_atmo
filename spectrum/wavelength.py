@@ -76,9 +76,7 @@ def build_wavelength_array(
 def get_number_of_wavelengths(
     starting_wavelength: float, ending_wavelength: float, resolution: float
 ) -> int:
-    return int(
-        np.ceil(resolution * np.log(ending_wavelength / starting_wavelength)) + 1
-    )
+    return int(np.ceil(resolution * np.log(ending_wavelength / starting_wavelength)))
 
 
 def get_wavelengths_from_number_of_elements_and_resolution(

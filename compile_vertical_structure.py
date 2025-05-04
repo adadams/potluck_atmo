@@ -15,7 +15,6 @@ from density import calculate_mass_from_radius_and_surface_gravity
 from material.gases.molecular_metrics import (
     MOLECULAR_WEIGHTS,
     calculate_mean_molecular_weight,
-    calculate_weighted_molecular_weights,
     mixing_ratios_to_number_densities,
 )
 from user.input_importers import import_model_id, import_user_vertical_inputs
@@ -55,24 +54,10 @@ def compile_vertical_structure_for_forward_model(
         attrs={"units": "kelvin"},
     )
 
-    molecular_weights_by_level: dict[str, NDArray[np.float64]] = (
-        calculate_weighted_molecular_weights(
-            mixing_ratios=user_vertical_inputs.mixing_ratios_by_level
-        )
-    )
-
-    mean_molecular_weight_by_level: NDArray[np.float64] = (
-        calculate_mean_molecular_weight(
-            mixing_ratios=user_vertical_inputs.mixing_ratios_by_level
-        )
-    )
-
     number_densities: dict[str, NDArray[np.float64]] = {
         species: xr.DataArray(data=number_density_array, coords=pressure_coordinates)
         for species, number_density_array in mixing_ratios_to_number_densities(
             mixing_ratios_by_level=user_vertical_inputs.mixing_ratios_by_level,
-            molecular_weights_by_level=molecular_weights_by_level,
-            mean_molecular_weight_by_level=mean_molecular_weight_by_level,
             pressure_in_cgs=user_vertical_inputs.pressures_by_level * BAR_TO_BARYE,
             temperatures_in_K=user_vertical_inputs.temperatures_by_level,
         ).items()

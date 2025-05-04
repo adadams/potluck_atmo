@@ -9,29 +9,30 @@ from constants_and_conversions import BOLTZMANN_CONSTANT_IN_CGS
 SOLAR_METAL_FRACTION: Final[float] = 0.0196
 
 NONMETAL_MOLECULAR_WEIGHTS: Final[dict[str, float]] = {
-    "h": 1.0,
-    "h2": 2.0,
-    "he": 4.0,
+    "h": 1.01,
+    "h2": 2.02,
+    "he": 4.00,
+    "h2he": 2.33,  # 84% H2, 16% He
 }
 
 METAL_MOLECULAR_WEIGHTS: Final[dict[str, float]] = {
-    "h2o": 16.0,
-    "ch4": 12.0,
-    "co": 28.0,
-    "co2": 44.0,
-    "nh3": 14.0,
-    "h2s": 32.0,
-    "Burrows_alk": 24.0,
-    "Lupu_alk": 24.0,
-    "na": 23.0,
-    "k": 39.0,
-    "crh": 52.0,
-    "feh": 56.0,
-    "tio": 64.0,
-    "vo": 67.0,
-    "hcn": 26.0,
-    "n2": 28.0,
-    "ph3": 31.0,
+    "h2o": 18.02,
+    "ch4": 16.04,
+    "co": 28.01,
+    "co2": 44.01,
+    "nh3": 17.03,
+    "h2s": 34.07,
+    "Burrows_alk": 23.94,  # ~1 part potassium for 16 parts sodium
+    "Lupu_alk": 23.94,
+    "na": 22.99,
+    "k": 39.098,
+    "crh": 53.00,
+    "feh": 56.85,
+    "tio": 63.87,
+    "vo": 66.94,
+    "hcn": 27.03,
+    "n2": 28.01,
+    "ph3": 34.00,
 }
 
 MOLECULAR_WEIGHTS: Final[dict[str, float]] = (
@@ -94,6 +95,15 @@ def calculate_metallicity(
     return np.log10(metals / reference_metal_fraction)
 
 
+def curate_molecular_weights(
+    mixing_ratios: dict[str, float | NDArray[np.float64]],
+    molecular_weights: dict[str, float] = MOLECULAR_WEIGHTS,
+) -> NDArray[np.float64]:
+    # TODO: this is essentially just picking the compounds by key.
+
+    return {compound: molecular_weights[compound] for compound in mixing_ratios}
+
+
 def calculate_weighted_molecular_weights(
     mixing_ratios: dict[str, float | NDArray[np.float64]],
     molecular_weights: dict[str, float] = MOLECULAR_WEIGHTS,
@@ -142,36 +152,24 @@ def mixing_ratios_to_partial_pressures_by_species(
 
 def mixing_ratios_to_number_densities_by_species(
     mixing_ratios_by_level: NDArray[np.float64],
-    molecular_weights_by_level: NDArray[np.float64],
-    mean_molecular_weights_by_level: NDArray[np.float64],
     pressure_in_cgs: NDArray[np.float64],
     temperatures_in_K: NDArray[np.float64],
 ) -> NDArray[np.float64]:
-    partial_pressure_fraction = mixing_ratios_to_partial_pressures_by_species(
-        mixing_ratios_by_level,
-        molecular_weights_by_level,
-        mean_molecular_weights_by_level,
+    total_number_density: NDArray[np.float64] = pressure_in_cgs / (
+        BOLTZMANN_CONSTANT_IN_CGS * temperatures_in_K
     )
 
-    return (
-        partial_pressure_fraction
-        * pressure_in_cgs
-        / (BOLTZMANN_CONSTANT_IN_CGS * temperatures_in_K)
-    )
+    return mixing_ratios_by_level * total_number_density
 
 
 def mixing_ratios_to_number_densities(
     mixing_ratios_by_level: dict[str, NDArray[np.float64]],
-    molecular_weights_by_level: dict[str, NDArray[np.float64]],
-    mean_molecular_weight_by_level: NDArray[np.float64],
     pressure_in_cgs: NDArray[np.float64],
     temperatures_in_K: NDArray[np.float64],
 ) -> dict[str, NDArray[np.float64]]:
     return {
         species: mixing_ratios_to_number_densities_by_species(
             mixing_ratios_by_level[species],
-            molecular_weights_by_level[species],
-            mean_molecular_weight_by_level,
             pressure_in_cgs,
             temperatures_in_K,
         )
@@ -181,8 +179,6 @@ def mixing_ratios_to_number_densities(
 
 def calculate_cumulative_molecular_metrics(
     mixing_ratios_by_level: dict[str, NDArray[np.float64]],
-    molecular_weights_by_level: dict[str, NDArray[np.float64]],
-    mean_molecular_weight_by_level: NDArray[np.float64],
     pressure_in_cgs: NDArray[np.float64],
     temperatures_in_K: NDArray[np.float64],
 ):
@@ -191,8 +187,6 @@ def calculate_cumulative_molecular_metrics(
     number_densities_by_level: dict[str, NDArray[np.float64]] = (
         mixing_ratios_to_number_densities(
             mixing_ratios_by_level,
-            molecular_weights_by_level,
-            mean_molecular_weight_by_level,
             pressure_in_cgs,
             temperatures_in_K,
         )

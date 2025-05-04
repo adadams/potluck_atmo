@@ -48,6 +48,16 @@ def altitudes_by_level_to_path_lengths(
     return path_lengths.assign_coords(pressure=midlayer_pressures)
 
 
+def altitudes_by_level_to_by_layer(
+    altitudes_by_level: xr.DataArray,
+) -> xr.DataArray:
+    midlayer_pressures: xr.DataArray = convert_pressure_coordinate_by_level_to_by_layer(
+        altitudes_by_level
+    )
+
+    return altitudes_by_level.interp(pressure=midlayer_pressures)
+
+
 def calculate_altitude_profile(
     log_pressures_in_cgs: NDArray[np.float64],
     temperatures_in_K: NDArray[np.float64],
@@ -55,6 +65,8 @@ def calculate_altitude_profile(
     planet_radius_in_cm: float,
     planet_mass_in_g: float,
 ) -> NDArray[np.float64]:
+    log_pressures_in_cgs: NDArray[np.float64] = log_pressures_in_cgs + 6
+
     log10_pressure_differences: NDArray[np.float64] = (
         log_pressures_in_cgs[1:] - log_pressures_in_cgs[:-1]
     )
@@ -71,9 +83,9 @@ def calculate_altitude_profile(
         mean_molecular_weight_in_g,
     ) in enumerate(
         zip(
-            reversed(log_pressure_differences),
-            reversed(temperatures_in_K[:-1]),
-            reversed(mean_molecular_weights_in_g[:-1]),
+            reversed(log_pressure_differences[:]),
+            reversed(temperatures_in_K[:]),
+            reversed(mean_molecular_weights_in_g[:]),
         ),
         start=1,
     ):

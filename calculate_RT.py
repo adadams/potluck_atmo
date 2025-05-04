@@ -13,6 +13,7 @@ from compile_vertical_structure import (
 from constants_and_conversions import MICRONS_TO_CM
 from material.two_stream import compile_composite_two_stream_parameters
 from material.types import TwoStreamParameters
+from radiative_transfer.RT_in_transmission import calculate_transmission_spectrum
 from radiative_transfer.RT_one_stream import calculate_spectral_intensity_at_surface
 from radiative_transfer.RT_Toon1989 import RT_Toon1989, RTToon1989Inputs
 from spectrum.bin import resample_spectral_quantity_to_new_wavelengths
@@ -72,8 +73,11 @@ def calculate_observed_fluxes(
     )
 
     path_lengths_in_cm: xr.DataArray = (
-        user_model_inputs.user_forward_model_inputs.path_lengths_by_level
-        * METERS_TO_CENTIMETERS
+        user_model_inputs.user_forward_model_inputs.path_lengths_by_layer
+    )
+
+    altitudes_in_cm: xr.DataArray = (
+        user_model_inputs.user_forward_model_inputs.altitudes_by_layer
     )
 
     two_stream_parameters: TwoStreamParameters = (
@@ -118,6 +122,24 @@ def calculate_observed_fluxes(
         units="erg s^-1 cm^-3",
     )
 
+    planet_radius_in_cm: float = (
+        user_model_inputs.user_forward_model_inputs.vertical_inputs.planet_radius_in_cm
+    )
+
+    # TODO: this is a test implementation with a specific radius.
+    # Really this should be its own function that takes these parameters.
+    transmission_flux: xr.DataArray = rename_and_unitize(
+        calculate_transmission_spectrum(
+            cumulative_optical_depth,
+            path_lengths_in_cm,
+            altitudes_in_cm,
+            stellar_radius_in_cm=1.53054e10,
+            planet_radius_in_cm=planet_radius_in_cm,
+        ),
+        name="transit_depth",
+        units="dimensionless",
+    )
+
     observed_onestream_flux: xr.DataArray = (
         emitted_onestream_flux
         * (
@@ -139,6 +161,7 @@ def calculate_observed_fluxes(
     return {
         "observed_onestream_flux": observed_onestream_flux,
         "observed_twostream_flux": observed_twostream_flux,
+        "transmission_flux": transmission_flux,
     }
 
 
@@ -146,6 +169,7 @@ def calculate_observed_fluxes(
 def resample_observed_fluxes(
     observed_fluxes: dict[str, xr.DataArray],
     reference_model_wavelengths: xr.DataArray,
+    **resampling_kwargs,
 ) -> dict[str, xr.DataArray]:
     return {
         observed_flux_name.replace("observed", "resampled"): rename_and_unitize(
@@ -153,6 +177,7 @@ def resample_observed_fluxes(
                 reference_model_wavelengths,
                 observed_flux.wavelength,
                 observed_flux,
+                **resampling_kwargs,
             ),
             name="resampled_observed_flux",
             units="erg s^-1 cm^-3",
