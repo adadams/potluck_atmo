@@ -1,10 +1,12 @@
+from dataclasses import dataclass, field
 from typing import Final
 
 import numpy as np
+import xarray as xr
 from numpy.typing import NDArray
 
-from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import PressureType, WavelengthType
+from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
+from xarray_serialization import CosineAngleType, PressureType, WavelengthType
 
 STREAM_COSINE_ANGLES: Final[NDArray[np.float64]] = np.array(
     [
@@ -34,20 +36,60 @@ STREAM_WEIGHTS: Final[NDArray[np.float64]] = np.array(
     ]
 )
 
+stream_cosine_angles_as_dataarray: Final[xr.DataArray] = xr.DataArray(
+    data=STREAM_COSINE_ANGLES,
+    dims=("cosine_angle",),
+    coords={"cosine_angle": STREAM_COSINE_ANGLES},
+    name="stream_cosine_angles",
+)
 
+stream_sine_angles_as_dataarray: Final[xr.DataArray] = xr.DataArray(
+    data=STREAM_SINE_ANGLES,
+    dims=("cosine_angle",),
+    coords={"cosine_angle": STREAM_COSINE_ANGLES},
+    name="stream_sine_angles",
+)
+
+stream_weights_as_dataarray: Final[xr.DataArray] = xr.DataArray(
+    data=STREAM_WEIGHTS,
+    dims=("cosine_angle",),
+    coords={"cosine_angle": STREAM_COSINE_ANGLES},
+    name="stream_weights",
+)
+
+
+@dataclass
+class OneStreamRTInputs:
+    thermal_intensity: xr.DataArray  # (wavelength, pressure)
+    cumulative_optical_depth_by_layer: xr.DataArray  # (wavelength, pressure)
+    stream_cosine_angles: xr.DataArray = field(
+        default_factory=lambda: stream_cosine_angles_as_dataarray.copy()
+    )
+    stream_sine_angles: xr.DataArray = field(
+        default_factory=lambda: stream_sine_angles_as_dataarray.copy()
+    )
+    stream_weights: xr.DataArray = field(
+        default_factory=lambda: stream_weights_as_dataarray.copy()
+    )
+
+
+@rename_and_unitize(new_name="emitted_onestream_flux", units="erg s^-1 cm^-3")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthType, PressureType),
         (WavelengthType, PressureType),
+        (CosineAngleType,),
+        (CosineAngleType,),
+        (CosineAngleType,),
     ),
     result_dimensions=((WavelengthType,),),
 )
 def calculate_spectral_intensity_at_surface(
     thermal_intensity: NDArray[np.float64],
     cumulative_optical_depth_by_layer: NDArray[np.float64],
-    stream_cosine_angles: NDArray[np.float64] = STREAM_COSINE_ANGLES,
-    stream_sine_angles: NDArray[np.float64] = STREAM_SINE_ANGLES,
-    stream_weights: NDArray[np.float64] = STREAM_WEIGHTS,
+    stream_cosine_angles: NDArray[np.float64],
+    stream_sine_angles: NDArray[np.float64],
+    stream_weights: NDArray[np.float64],
 ) -> NDArray[np.float64]:
     stream_cosine_angles = np.expand_dims(
         stream_cosine_angles,

@@ -42,6 +42,7 @@ DimensionAnnotation: TypeAlias = tuple[str, UnitType]
 WavelengthType: DimensionAnnotation = ("wavelength", WavelengthUnits)
 PressureType: DimensionAnnotation = ("pressure", PressureUnits)
 SpeciesType: DimensionAnnotation = ("species", DimensionlessUnits)
+CosineAngleType: DimensionAnnotation = ("cosine_angle", DimensionlessUnits)
 
 ArgumentDimensionType: TypeAlias = tuple[DimensionAnnotation]
 FunctionDimensionType: TypeAlias = tuple[ArgumentDimensionType]

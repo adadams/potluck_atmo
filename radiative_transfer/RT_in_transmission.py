@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from xarray_functional_wrappers import Dimensionalize
+from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
 from xarray_serialization import PressureType, WavelengthType
 
 """
@@ -39,16 +39,19 @@ vector<double> Planet::transFlux(double rs, vector<double> wavens, string table)
 """
 
 
+@rename_and_unitize(new_name="transit_depth", units="dimensionless")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthType, PressureType),
         (PressureType,),
         (PressureType,),
+        None,
+        None,
     ),
     result_dimensions=((WavelengthType,),),
 )
 def calculate_transmission_spectrum(
-    cumulative_optical_depth_by_layer: NDArray[np.float64],
+    cumulative_optical_depth: NDArray[np.float64],
     path_lengths: NDArray[np.float64],
     altitudes: NDArray[np.float64],
     stellar_radius_in_cm: float,
@@ -58,7 +61,7 @@ def calculate_transmission_spectrum(
     solid_stellar_disk_area: float = np.pi * stellar_radius_in_cm**2
 
     planet_area_with_atmosphere: float = solid_planet_disk_area + np.sum(
-        (1 - np.exp(-cumulative_optical_depth_by_layer))
+        (1 - np.exp(-cumulative_optical_depth))
         * path_lengths
         * 2
         * np.pi

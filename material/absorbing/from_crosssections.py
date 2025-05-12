@@ -1,10 +1,11 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from xarray_functional_wrappers import Dimensionalize
+from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
 from xarray_serialization import PressureType, SpeciesType, WavelengthType
 
 
+@rename_and_unitize(new_name="attenuation_coefficients", units="cm^-1")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthType, PressureType, SpeciesType),
@@ -19,6 +20,7 @@ def crosssections_to_attenuation_coefficients(
     return crosssections * number_density
 
 
+@rename_and_unitize(new_name="optical_depth", units="dimensionless")
 @Dimensionalize(
     argument_dimensions=((WavelengthType, PressureType), (PressureType,)),
     result_dimensions=((WavelengthType, PressureType),),
@@ -29,6 +31,7 @@ def attenuation_coefficients_to_optical_depths(
     return attenuation_coefficients * path_length
 
 
+@rename_and_unitize(new_name="optical_depth", units="dimensionless")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthType, SpeciesType, PressureType),

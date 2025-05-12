@@ -1,3 +1,5 @@
+from dataclasses import astuple
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -35,7 +37,9 @@ def calculate_two_stream_scattering_parameters(
         total_scattering_coefficient / total_extinction_coefficient
     )
 
-    return TwoStreamScatteringParameters(
-        scattering_asymmetry_parameter=scattering_asymmetry_parameter,
-        single_scattering_albedo=single_scattering_albedo,
+    return astuple(
+        TwoStreamScatteringParameters(
+            scattering_asymmetry_parameter=scattering_asymmetry_parameter,
+            single_scattering_albedo=single_scattering_albedo,
+        )
     )

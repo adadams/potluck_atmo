@@ -3,9 +3,10 @@ from dataclasses import dataclass, field
 from functools import partial, reduce, wraps
 from inspect import signature
 from pathlib import Path
-from typing import Any, NamedTuple, Protocol, TypeAlias
+from typing import Any, NamedTuple, Optional, Protocol, TypeAlias
 
 import xarray as xr
+from decopatch import DECORATED, function_decorator
 
 from xarray_serialization import (
     ArgumentDimensionType,
@@ -57,19 +58,40 @@ class NamesAndDimensionalities(NamedTuple):
 
 
 def separate_argument_dimension_into_names_and_dimensions(
-    argument_dimension_type: ArgumentDimensionType,
+    arguments_dimensions_set: ArgumentDimensionType,
 ) -> NamesAndDimensionalities:
-    argument_dimensions: tuple[XarrayDimension] = tuple(
-        tuple([dimension_annotation[0] for dimension_annotation in argument_dimension])
-        for argument_dimension in argument_dimension_type
+    arguments_dimensions_names: list[Optional[XarrayDimension]] = []
+    arguments_dimensions_dimensions: list[Optional[DimensionAnnotation]] = []
+
+    for argument_dimensions_set in arguments_dimensions_set:
+        if argument_dimensions_set:
+            argument_dimension_names: list[str] = [
+                argument_dimension_name
+                for argument_dimension_name, _ in argument_dimensions_set
+            ]
+
+            argument_dimension_dimensions: list[DimensionAnnotation] = [
+                argument_dimension_dimension
+                for _, argument_dimension_dimension in argument_dimensions_set
+            ]
+
+            arguments_dimensions_names.append(tuple(argument_dimension_names))
+            arguments_dimensions_dimensions.append(tuple(argument_dimension_dimensions))
+
+        else:
+            arguments_dimensions_names.append(tuple())
+            arguments_dimensions_dimensions.append(tuple())
+
+    arguments_dimensions_names: tuple[XarrayDimension] = tuple(
+        arguments_dimensions_names
+    )
+    arguments_dimensions_dimensions: tuple[DimensionAnnotation] = tuple(
+        arguments_dimensions_dimensions
     )
 
-    dimensionalities: tuple[DimensionAnnotation] = tuple(
-        tuple([dimension_annotation[1] for dimension_annotation in argument_dimension])
-        for argument_dimension in argument_dimension_type
+    return NamesAndDimensionalities(
+        arguments_dimensions_names, arguments_dimensions_dimensions
     )
-
-    return NamesAndDimensionalities(argument_dimensions, dimensionalities)
 
 
 @dataclass
@@ -189,8 +211,24 @@ def map_function_arguments_to_dataset_variables(
     )
 
 
-def rename_and_unitize(data_array: xr.DataArray, name: str, units: str) -> xr.DataArray:
-    return data_array.rename(name).assign_attrs(units=units)
+# def rename_and_unitize(data_array: xr.DataArray, name: str, units: str) -> xr.DataArray:
+#    return data_array.rename(name).assign_attrs(units=units)
+
+
+@function_decorator
+def rename_and_unitize(new_name: str, units: str, function=DECORATED) -> Callable:
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+        result = function(*args, **kwargs)
+        if isinstance(result, xr.DataArray):
+            result = result.rename(new_name).assign_attrs(units=units)
+        elif isinstance(result, xr.Dataset):
+            result = result.rename({var: new_name for var in result.data_vars})
+            for var in result.data_vars:
+                result[var].attrs["units"] = units
+        return result
+
+    return wrapper
 
 
 XarrayOutputs: TypeAlias = Mapping[str, xr.DataArray | xr.Dataset]

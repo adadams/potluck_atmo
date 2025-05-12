@@ -5,10 +5,8 @@ import xarray as xr
 
 from constants_and_conversions import MICRONS_TO_CM
 from temperature.thermal_intensity import calculate_thermal_intensity_by_layer
-from xarray_functional_wrappers import save_xarray_outputs_to_file
 
 
-@save_xarray_outputs_to_file
 def compile_thermal_structure_for_forward_model(
     temperatures_by_level: xr.DataArray,
     pressures_by_layer: xr.DataArray,

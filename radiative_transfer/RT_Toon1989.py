@@ -1,13 +1,15 @@
-from typing import Final, NamedTuple, Optional
+from dataclasses import dataclass, field
+from typing import Final
 
 import numpy as np
+import xarray as xr
 from numpy.typing import NDArray
 
 from basic_functional_tools import interleave
-from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import PressureType, WavelengthType
+from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
+from xarray_serialization import CosineAngleType, PressureType, WavelengthType
 
-MAXIMUM_EXP_FLOAT: Final[float] = 10.0
+MAXIMUM_EXP_FLOAT: Final[float] = 5.0
 
 STREAM_COSINE_ANGLES: Final[NDArray[np.float64]] = np.array(
     [
@@ -35,6 +37,20 @@ STREAM_WEIGHTS: Final[NDArray[np.float64]] = np.array(
     ]
 )
 
+stream_cosine_angles_as_dataarray: xr.DataArray = xr.DataArray(
+    data=STREAM_COSINE_ANGLES,
+    dims=["cosine_angle"],
+    coords={"cosine_angle": STREAM_COSINE_ANGLES},
+    attrs={"units": "dimensionless"},
+)
+
+stream_weights_as_dataarray: xr.DataArray = xr.DataArray(
+    data=STREAM_WEIGHTS,
+    dims=["cosine_angle"],
+    coords={"cosine_angle": STREAM_COSINE_ANGLES},
+    attrs={"units": "dimensionless"},
+)
+
 bottom_layer: list[slice] = [slice(None, None), slice(-1, None)]
 top_layer: list[slice] = [slice(None), slice(0, 1)]
 upper_edges: list[slice] = [slice(None, None), slice(1, None)]
@@ -44,16 +60,24 @@ lower_edges: list[slice] = [slice(None, None), slice(None, -1)]
 ###############################################################################
 ############################ Main callable function. ##########################
 ###############################################################################
-class RTToon1989Inputs(NamedTuple):
-    thermal_intensity: NDArray[np.float64]  # (wavelength, pressure)
-    delta_thermal_intensity: NDArray[np.float64]  # (wavelength, pressure)
-    scattering_asymmetry_parameter: NDArray[np.float64]  # (wavelength, pressure)
-    single_scattering_albedo: NDArray[np.float64]  # (wavelength, pressure)
-    optical_depth: NDArray[np.float64]  # (wavelength, pressure)
-    stream_cosine_angles: Optional[NDArray[np.float64]] = STREAM_COSINE_ANGLES
-    stream_weights: Optional[NDArray[np.float64]] = STREAM_WEIGHTS
 
 
+@dataclass
+class RTToon1989Inputs:
+    thermal_intensity: xr.DataArray  # (wavelength, pressure)
+    delta_thermal_intensity: xr.DataArray  # (wavelength, pressure)
+    scattering_asymmetry_parameter: xr.DataArray  # (wavelength, pressure)
+    single_scattering_albedo: xr.DataArray  # (wavelength, pressure)
+    optical_depth: xr.DataArray  # (wavelength, pressure)
+    stream_cosine_angles: xr.DataArray = field(
+        default_factory=lambda: stream_cosine_angles_as_dataarray.copy()
+    )
+    stream_weights: xr.DataArray = field(
+        default_factory=lambda: stream_weights_as_dataarray.copy()
+    )
+
+
+@rename_and_unitize(new_name="emitted_twostream_flux", units="erg s^-1 cm^-3")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthType, PressureType),
@@ -61,6 +85,8 @@ class RTToon1989Inputs(NamedTuple):
         (WavelengthType, PressureType),
         (WavelengthType, PressureType),
         (WavelengthType, PressureType),
+        (CosineAngleType,),
+        (CosineAngleType,),
     ),
     result_dimensions=((WavelengthType,),),
 )
@@ -70,8 +96,10 @@ def RT_Toon1989(
     scattering_asymmetry_parameter: NDArray[np.float64],
     single_scattering_albedo: NDArray[np.float64],
     optical_depth: NDArray[np.float64],
-    stream_cosine_angles: NDArray[np.float64] = STREAM_COSINE_ANGLES,
-    stream_weights: NDArray[np.float64] = STREAM_WEIGHTS,
+    stream_cosine_angles: NDArray[np.float64],
+    stream_weights: NDArray[np.float64],
+    # stream_cosine_angles: NDArray[np.float64] = STREAM_COSINE_ANGLES,
+    # stream_weights: NDArray[np.float64] = STREAM_WEIGHTS,
 ) -> NDArray[np.float64]:
     terms_for_DSolver = calculate_terms_for_DSolver(
         optical_depth,
@@ -100,7 +128,8 @@ def RT_Toon1989(
 ###############################################################################
 
 
-class DsolverInputs(NamedTuple):
+@dataclass
+class DsolverInputs:
     # cp, cpm1, cm, cmm1, ep, btop, bottom, gama
     cp: NDArray[np.float64]  # size of array:
     cpm1: NDArray[np.float64]
@@ -266,8 +295,8 @@ def calculate_flux(
     thermal_intensity: NDArray[np.float64],
     delta_thermal_intensity: NDArray[np.float64],
     xki_terms: NDArray[np.float64],
-    stream_cosine_angles: NDArray[np.float64] = STREAM_COSINE_ANGLES,
-    stream_weights: NDArray[np.float64] = STREAM_WEIGHTS,
+    stream_cosine_angles: NDArray[np.float64],
+    stream_weights: NDArray[np.float64],
     mu_1: float = 0.5,  # This is mu_1 in Toon et al. 1989
 ) -> NDArray[np.float64]:
     tau = optical_depth

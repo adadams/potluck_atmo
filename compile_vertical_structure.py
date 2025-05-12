@@ -23,7 +23,6 @@ from vertical.altitude import (
     calculate_altitude_profile,
     convert_dataset_by_pressure_levels_to_pressure_layers,
 )
-from xarray_functional_wrappers import save_xarray_outputs_to_file
 from xarray_serialization import XarrayDataArray, XarrayDataset
 
 current_directory: Path = Path(__file__).parent
@@ -34,7 +33,6 @@ class ForwardModelXarrayInputs(NamedTuple):
     by_layer: xr.Dataset
 
 
-@save_xarray_outputs_to_file
 def compile_vertical_structure_for_forward_model(
     user_vertical_inputs: UserVerticalModelInputs,
 ) -> xr.Dataset:
@@ -57,7 +55,7 @@ def compile_vertical_structure_for_forward_model(
     number_densities: dict[str, NDArray[np.float64]] = {
         species: xr.DataArray(data=number_density_array, coords=pressure_coordinates)
         for species, number_density_array in mixing_ratios_to_number_densities(
-            mixing_ratios_by_level=user_vertical_inputs.mixing_ratios_by_level,
+            mixing_ratios_by_level=user_vertical_inputs.chemistry,
             pressure_in_cgs=user_vertical_inputs.pressures_by_level * BAR_TO_BARYE,
             temperatures_in_K=user_vertical_inputs.temperatures_by_level,
         ).items()
@@ -71,7 +69,7 @@ def compile_vertical_structure_for_forward_model(
 
     number_densities_dataarray = number_densities_dataarray.to_array(
         dim="species", name="number_density"
-    )
+    ).sortby("species")
 
     inputs_by_level: xr.Dataset = xr.Dataset(
         {

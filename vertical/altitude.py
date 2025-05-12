@@ -6,6 +6,8 @@ from constants_and_conversions import (
     BOLTZMANN_CONSTANT_IN_CGS,
     GRAVITATIONAL_CONSTANT_IN_CGS,
 )
+from xarray_functional_wrappers import Dimensionalize
+from xarray_serialization import PressureType
 
 
 def convert_pressure_coordinate_by_level_to_by_layer(
@@ -58,6 +60,16 @@ def altitudes_by_level_to_by_layer(
     return altitudes_by_level.interp(pressure=midlayer_pressures)
 
 
+@Dimensionalize(
+    argument_dimensions=(
+        (PressureType,),
+        (PressureType,),
+        (PressureType,),
+        None,
+        None,
+    ),
+    result_dimensions=((PressureType,),),
+)
 def calculate_altitude_profile(
     log_pressures_in_cgs: NDArray[np.float64],
     temperatures_in_K: NDArray[np.float64],

@@ -7,10 +7,7 @@ import xarray as xr
 from numpy.typing import NDArray
 from spectres import spectres
 
-from spectrum.convolve import (
-    convolve_with_constant_FWHM,
-    numpy_convolve_with_constant_FWHM,
-)
+from spectrum.convolve import convolve_with_constant_FWHM_using_FFT
 
 resample_by_spectres: Callable[
     [xr.DataArray, xr.DataArray, xr.DataArray], xr.DataArray
@@ -30,7 +27,7 @@ def convolve_and_bin_with_constant_FWHM(
     model_spectral_quantity: NDArray[np.float64],
     fwhm: float,
 ):
-    convolved_spectrum: NDArray[np.float64] = convolve_with_constant_FWHM(
+    convolved_spectrum: NDArray[np.float64] = convolve_with_constant_FWHM_using_FFT(
         model_wavelengths, model_spectral_quantity, fwhm
     )
 
@@ -47,6 +44,15 @@ convolve_and_resample_by_spectres = partial(
 )
 
 
+# @Dimensionalize(
+#    argument_dimensions=(
+#        (WavelengthType,),
+#        (WavelengthType,),
+#        (WavelengthType,),
+#    ),
+#    result_dimensions=((WavelengthType,),),
+# )
+# TODO: write a separate wrapper for when dimensions change size.
 def resample_spectral_quantity_to_new_wavelengths(
     new_wavelengths: xr.DataArray,
     model_wavelengths: xr.DataArray,
@@ -57,41 +63,5 @@ def resample_spectral_quantity_to_new_wavelengths(
         fwhm = 3.0 * (new_wavelengths[-1] - new_wavelengths[-2])
 
     return convolve_and_resample_by_spectres(
-        new_wavelengths, model_wavelengths, model_spectral_quantity, fwhm
-    ).assign_coords(wavelength=new_wavelengths)
-
-
-def numpy_convolve_and_bin_with_constant_FWHM(
-    new_wavelengths: NDArray[np.float64],
-    model_wavelengths: NDArray[np.float64],
-    model_spectral_quantity: NDArray[np.float64],
-    fwhm: float,
-):
-    convolved_spectrum: NDArray[np.float64] = numpy_convolve_with_constant_FWHM(
-        model_wavelengths, model_spectral_quantity, fwhm
-    )
-    return spectres(new_wavelengths, model_wavelengths, convolved_spectrum)
-
-
-numpy_convolve_and_resample_by_spectres = partial(
-    xr.apply_ufunc,
-    numpy_convolve_and_bin_with_constant_FWHM,
-    input_core_dims=[["wavelength"], ["wavelength"], ["wavelength"], []],
-    output_core_dims=[["wavelength"]],
-    exclude_dims=set(("wavelength",)),
-    keep_attrs=True,
-)
-
-
-def numpy_resample_spectral_quantity_to_new_wavelengths(
-    new_wavelengths: xr.DataArray,
-    model_wavelengths: xr.DataArray,
-    model_spectral_quantity: xr.DataArray,
-    fwhm: Optional[float] = None,
-) -> xr.Dataset:
-    if fwhm is None:
-        fwhm = 3.0 * (new_wavelengths[1] - new_wavelengths[0])
-
-    return numpy_convolve_and_resample_by_spectres(
         new_wavelengths, model_wavelengths, model_spectral_quantity, fwhm
     ).assign_coords(wavelength=new_wavelengths)
