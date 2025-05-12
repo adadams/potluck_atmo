@@ -15,6 +15,8 @@ user/test_*
 *.pdf
 *.nc
 !user/R1b_retrieval_model/input_files/R1b_retrieval_precurated_crosssection_catalog.nc
+!user/R1b_retrieval_model/intermediate_outputs/*
+!user/R1b_retrieval_model/output_files/*
 test_opacity_tables.py
 material/gases/reference_data/picaso_lupu_temperature_levels.py
 compare_nearly_isothermal_spectra.py
