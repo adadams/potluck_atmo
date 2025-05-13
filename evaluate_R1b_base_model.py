@@ -12,7 +12,6 @@ from calculate_RT import calculate_observed_transmission_spectrum
 from model_statistics.calculate_statistics import calculate_log_likelihood
 from model_statistics.error_inflation import inflate_errors_by_flux_scaling
 from spectrum.bin import resample_spectral_quantity_to_new_wavelengths
-from user.input_importers import import_model_id
 from user.input_structs import UserForwardModelInputs
 
 model_directory_label: str = "R1b_retrieval"
@@ -40,14 +39,10 @@ precurated_crosssection_catalog: xr.Dataset = (
     forward_model_module.precurated_crosssection_catalog_dataset
 )
 
-model_id: str = import_model_id(
-    model_directory_label=model_directory_label, parent_directory="user"
-)
-
 data: xr.Dataset = forward_model_module.data_dataset
 reference_model_wavelengths: xr.DataArray = data.wavelength
 
-fraction_of_reddest_fwhm_to_convolve_with: float = 0.01  # 0.01
+fraction_of_reddest_fwhm_to_convolve_with: float = 0.01
 
 
 def calculate_transit_model(
@@ -112,19 +107,16 @@ def evaluate_log_likelihood_with_free_parameters(
     planet_radius_relative_to_earth: float = free_parameters[
         "planet_radius_relative_to_earth"
     ]
-    uniform_ch4_log_abundance: float = free_parameters["uniform_ch4_log_abundance"]
-    uniform_h2o_log_abundance: float = free_parameters["uniform_h2o_log_abundance"]
+    uniform_log_abundances: dict[str, float] = {
+        "h2o": free_parameters["uniform_h2o_log_abundance"],
+        "ch4": free_parameters["uniform_ch4_log_abundance"],
+    }
     flux_scaled_error_inflation_factor: float = free_parameters[
         "flux_scaled_error_inflation_factor"
     ]
     log10_constant_error_inflation_term: float = free_parameters[
         "log10_constant_error_inflation_term"
     ]
-
-    uniform_log_abundances: dict[str, float] = {
-        "h2o": uniform_h2o_log_abundance,
-        "ch4": uniform_ch4_log_abundance,
-    }
 
     forward_model_inputs: UserForwardModelInputs = (
         forward_model_module.build_uniform_mixing_ratio_forward_model_with_free_radius(
@@ -153,16 +145,16 @@ def evaluate_log_likelihood_with_free_parameters(
 
 
 if __name__ == "__main__":
-    test_mixing_ratio: dict[str, float] = {"h2o": -3.171, "ch4": -3.318}
+    test_model_parameters: ModelFreeParameters = ModelFreeParameters(
+        planet_radius_relative_to_earth=2.90156,
+        uniform_ch4_log_abundance=-3.318,
+        uniform_h2o_log_abundance=-3.171,
+        flux_scaled_error_inflation_factor=1e-4,
+        log10_constant_error_inflation_term=-10.0,
+    )
 
     test_log_likelihood: float = evaluate_log_likelihood_with_free_parameters(
-        ModelFreeParameters(
-            planet_radius_relative_to_earth=2.90156,
-            uniform_ch4_log_abundance=test_mixing_ratio["ch4"],
-            uniform_h2o_log_abundance=test_mixing_ratio["h2o"],
-            flux_scaled_error_inflation_factor=1e-4,
-            log10_constant_error_inflation_term=-5.0,
-        )
+        test_model_parameters
     )
     print(f"{test_log_likelihood=}")
 
