@@ -1,15 +1,16 @@
 from importlib import import_module
 from pathlib import Path
 from types import ModuleType
+from typing import TypedDict
 
+import numpy as np
 import xarray as xr
 from matplotlib import pyplot as plt
+from nautilus import Prior, Sampler
 
 from calculate_RT import calculate_observed_transmission_spectrum
-from model_statistics.calculate_statistics import (
-    calculate_log_likelihood,
-    calculate_reduced_chi_squared_statistic,
-)
+from model_statistics.calculate_statistics import calculate_log_likelihood
+from model_statistics.error_inflation import inflate_errors_by_flux_scaling
 from spectrum.bin import resample_spectral_quantity_to_new_wavelengths
 from user.input_importers import import_model_id
 from user.input_structs import UserForwardModelInputs
@@ -94,66 +95,96 @@ def calculate_transit_model_log_likelihood(
     return log_likelihood
 
 
-def calculate_transit_model_reduced_chi_squared_statistic(
-    forward_model_inputs: UserForwardModelInputs,
-    data: xr.DataArray,
-    data_error: xr.DataArray,
-    number_of_free_parameters: int,
+class ModelFreeParameters(TypedDict):
+    planet_radius_relative_to_earth: float
+    uniform_ch4_log_abundance: float
+    uniform_h2o_log_abundance: float
+    flux_scaled_error_inflation_factor: float
+    log10_constant_error_inflation_term: float
+
+
+def evaluate_log_likelihood_with_free_parameters(
+    free_parameters: ModelFreeParameters,
     resampling_fwhm_fraction: float = fraction_of_reddest_fwhm_to_convolve_with,
+    data_dataset: xr.Dataset = data,
 ) -> float:
+    # unpack dict of free parameters
+    planet_radius_relative_to_earth: float = free_parameters[
+        "planet_radius_relative_to_earth"
+    ]
+    uniform_ch4_log_abundance: float = free_parameters["uniform_ch4_log_abundance"]
+    uniform_h2o_log_abundance: float = free_parameters["uniform_h2o_log_abundance"]
+    flux_scaled_error_inflation_factor: float = free_parameters[
+        "flux_scaled_error_inflation_factor"
+    ]
+    log10_constant_error_inflation_term: float = free_parameters[
+        "log10_constant_error_inflation_term"
+    ]
+
+    uniform_log_abundances: dict[str, float] = {
+        "h2o": uniform_h2o_log_abundance,
+        "ch4": uniform_ch4_log_abundance,
+    }
+
+    forward_model_inputs: UserForwardModelInputs = (
+        forward_model_module.build_uniform_mixing_ratio_forward_model_with_free_radius(
+            planet_radius_relative_to_earth=planet_radius_relative_to_earth,
+            uniform_log_abundances=uniform_log_abundances,
+        )
+    )
+
     transit_depths_sampled_to_data: xr.DataArray = calculate_transit_model(
         forward_model_inputs=forward_model_inputs,
         resampling_fwhm_fraction=resampling_fwhm_fraction,
     )
 
-    reduced_chi_squared_statistic: float = calculate_reduced_chi_squared_statistic(
-        data, data_error, transit_depths_sampled_to_data, number_of_free_parameters
+    inflated_data_errors: xr.DataArray = inflate_errors_by_flux_scaling(
+        data_dataset.data,
+        data_dataset.data_error,
+        flux_scaled_error_inflation_factor,
+        log10_constant_error_inflation_term,
     )
 
-    return reduced_chi_squared_statistic
+    log_likelihood: float = calculate_log_likelihood(
+        transit_depths_sampled_to_data, data_dataset.data, inflated_data_errors
+    ).item()
+
+    return log_likelihood
 
 
 if __name__ == "__main__":
-    test_mixing_ratios: dict[str, float] = [
-        {"h2o": -15.171, "ch4": -15.318},
-        {"h2o": -14.171, "ch4": -14.318},
-        {"h2o": -13.171, "ch4": -13.318},
-        {"h2o": -12.171, "ch4": -12.318},
-        {"h2o": -11.171, "ch4": -11.318},
-        {"h2o": -10.171, "ch4": -10.318},
-        {"h2o": -9.171, "ch4": -9.318},
-        {"h2o": -8.171, "ch4": -8.318},
-        {"h2o": -7.171, "ch4": -7.318},
-        {"h2o": -6.171, "ch4": -6.318},
-        {"h2o": -5.171, "ch4": -5.318},
-        {"h2o": -4.171, "ch4": -4.318},
-        {"h2o": -3.171, "ch4": -3.318},
-        {"h2o": -2.171, "ch4": -2.318},
-        {"h2o": -1.171, "ch4": -1.318},
-    ]
+    test_mixing_ratio: dict[str, float] = {"h2o": -3.171, "ch4": -3.318}
 
-    for test_mixing_ratio in test_mixing_ratios:
-        print(f"{test_mixing_ratio=}")
-        test_forward_model_inputs: UserForwardModelInputs = (
-            forward_model_module.build_uniform_mixing_ratio_forward_model(
-                uniform_log_abundances=test_mixing_ratio
-            )
+    test_log_likelihood: float = evaluate_log_likelihood_with_free_parameters(
+        ModelFreeParameters(
+            planet_radius_relative_to_earth=2.90156,
+            uniform_ch4_log_abundance=test_mixing_ratio["ch4"],
+            uniform_h2o_log_abundance=test_mixing_ratio["h2o"],
+            flux_scaled_error_inflation_factor=1e-4,
+            log10_constant_error_inflation_term=-5.0,
         )
+    )
+    print(f"{test_log_likelihood=}")
 
-        transit_depths_sampled_to_data: xr.DataArray = calculate_transit_model(
-            forward_model_inputs=test_forward_model_inputs,
-            resampling_fwhm_fraction=fraction_of_reddest_fwhm_to_convolve_with,
-        )
+    prior = Prior()
+    prior.add_parameter("planet_radius_relative_to_earth", dist=(0.5, 20))
+    prior.add_parameter("uniform_ch4_log_abundance", dist=(-12, -1))
+    prior.add_parameter("uniform_h2o_log_abundance", dist=(-12, -1))
+    prior.add_parameter("flux_scaled_error_inflation_factor", dist=(0.0, 1.0))
+    prior.add_parameter("log10_constant_error_inflation_term", dist=(-100.0, 0.0))
 
-        log_likelihood: float = calculate_log_likelihood(
-            transit_depths_sampled_to_data, data.data, data.data_error
-        ).item()
-        print(f"{log_likelihood=}")
+    sampler = Sampler(
+        prior,
+        evaluate_log_likelihood_with_free_parameters,
+        n_live=100,
+        filepath=output_file_directory / f"{model_directory_label}_nautilus.hdf5",
+    )
+    sampler.run(verbose=True)
 
-        reduced_chi_squared_statistic: float = calculate_reduced_chi_squared_statistic(
-            data.data,
-            data.data_error,
-            transit_depths_sampled_to_data,
-            30,
-        ).item()
-        print(f"{reduced_chi_squared_statistic=}")
+    points, log_w, log_l = sampler.posterior()
+    log_z = sampler.log_z
+
+    np.save(output_file_directory / f"{model_directory_label}_points.npy", points)
+    np.save(output_file_directory / f"{model_directory_label}_log_w.npy", log_w)
+    np.save(output_file_directory / f"{model_directory_label}_log_l.npy", log_l)
+    np.save(output_file_directory / f"{model_directory_label}_log_z.npy", log_z)

@@ -91,12 +91,12 @@ def calculate_spectral_intensity_at_surface(
     stream_sine_angles: NDArray[np.float64],
     stream_weights: NDArray[np.float64],
 ) -> NDArray[np.float64]:
-    stream_cosine_angles = np.expand_dims(
+    stream_cosine_angles: NDArray[np.float64] = np.expand_dims(
         stream_cosine_angles,
         axis=tuple(range(1, cumulative_optical_depth_by_layer.ndim + 1)),
     )
 
-    stream_sine_angles = np.expand_dims(
+    stream_sine_angles: NDArray[np.float64] = np.expand_dims(
         stream_sine_angles,
         axis=tuple(range(1, cumulative_optical_depth_by_layer.ndim + 1)),
     )
@@ -121,12 +121,13 @@ def calculate_spectral_intensity_at_surface(
         spectral_intensity_by_layer * stream_sine_angles, axis=-1
     )
 
-    stream_weights = np.expand_dims(
+    stream_weights: NDArray[np.float64] = np.expand_dims(
         stream_weights,
         axis=tuple(range(1, spectral_intensity_at_surface_by_angle.ndim)),
     )
 
-    spectral_intensity_at_surface = np.pi**2 * np.sum(
+    spectral_intensity_at_surface: NDArray[np.float64] = np.pi**2 * np.sum(
         spectral_intensity_at_surface_by_angle * stream_weights, axis=0
     )
+
     return spectral_intensity_at_surface

@@ -5,7 +5,7 @@ from types import ModuleType
 
 import xarray as xr
 
-from constants_and_conversions import AMU_IN_GRAMS, PARSEC_TO_CM
+from constants_and_conversions import AMU_IN_GRAMS, EARTH_RADIUS_IN_CM, PARSEC_TO_CM
 from density import calculate_mass_from_radius_and_surface_gravity
 from material.gases.molecular_metrics import calculate_mean_molecular_weight
 from user.input_importers import import_model_id
@@ -34,11 +34,11 @@ model_directory_label: str = "R1b_retrieval"
 # catalog_filepath: Path = opacity_data_directory / f"{opacity_catalog}.nc"
 # crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(catalog_filepath)
 
-crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(
-    input_files_directory
-    # Path("/Volumes/Orange")
-    / "R1b_retrieval_precurated_crosssection_catalog_nonfixed_TP.nc"
-)
+# crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(
+#    input_files_directory
+#    # Path("/Volumes/Orange")
+#    / "R1b_retrieval_precurated_crosssection_catalog_nonfixed_TP.nc"
+# )
 
 precurated_crosssection_catalog_dataset_filepath: Path = (
     input_files_directory / "R1b_retrieval_precurated_crosssection_catalog.nc"
@@ -46,6 +46,8 @@ precurated_crosssection_catalog_dataset_filepath: Path = (
 precurated_crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(
     precurated_crosssection_catalog_dataset_filepath
 ).crosssections
+
+crosssection_catalog_dataset: xr.Dataset = precurated_crosssection_catalog_dataset
 
 data_dataset_filepath: Path = current_directory / "T3B_APOLLO_truncated.nc"
 data_dataset: xr.Dataset = xr.open_dataset(data_dataset_filepath)
@@ -149,6 +151,20 @@ def build_uniform_mixing_ratio_forward_model(
 ) -> UserForwardModelInputs:
     vertical_inputs: UserVerticalModelInputs = build_uniform_vertical_structure(
         uniform_log_abundances=uniform_log_abundances
+    )
+
+    return build_forward_model(vertical_structure=vertical_inputs)
+
+
+def build_uniform_mixing_ratio_forward_model_with_free_radius(
+    planet_radius_relative_to_earth: float,
+    uniform_log_abundances: dict[str, float],
+) -> UserForwardModelInputs:
+    planet_radius_in_cm: float = planet_radius_relative_to_earth * EARTH_RADIUS_IN_CM
+
+    vertical_inputs: UserVerticalModelInputs = build_uniform_vertical_structure(
+        planet_radius_in_cm=planet_radius_in_cm,
+        uniform_log_abundances=uniform_log_abundances,
     )
 
     return build_forward_model(vertical_structure=vertical_inputs)

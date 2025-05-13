@@ -157,14 +157,6 @@ def build_uniform_model_inputs(
         children={"chemistry": chemistry_node},
     )
 
-    # return UserVerticalModelInputs(
-    #    planet_radius_in_cm=planet_radius_in_cm,
-    #    planet_gravity_in_cgs=planet_gravity_in_cgs,
-    #    log_pressures_by_level=log_pressures_by_level,
-    #    pressures_by_level=pressures_by_level,
-    #    temperatures_by_level=temperatures_by_level,
-    #    mixing_ratios_by_level=mixing_ratios_by_level,
-    # )
     return default_vertical_structure_datatree
 
 
