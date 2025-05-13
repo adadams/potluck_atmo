@@ -159,9 +159,9 @@ if __name__ == "__main__":
     print(f"{test_log_likelihood=}")
 
     prior = Prior()
-    prior.add_parameter("planet_radius_relative_to_earth", dist=(0.5, 20))
-    prior.add_parameter("uniform_ch4_log_abundance", dist=(-12, -1))
-    prior.add_parameter("uniform_h2o_log_abundance", dist=(-12, -1))
+    prior.add_parameter("planet_radius_relative_to_earth", dist=(0.5, 20.0))
+    prior.add_parameter("uniform_ch4_log_abundance", dist=(-12.0, -1.0))
+    prior.add_parameter("uniform_h2o_log_abundance", dist=(-12.0, -1.0))
     prior.add_parameter("flux_scaled_error_inflation_factor", dist=(0.0, 1.0))
     prior.add_parameter("log10_constant_error_inflation_term", dist=(-100.0, 0.0))
 

@@ -10,7 +10,7 @@ from user.input_importers import import_model_id
 from user.input_structs import UserVerticalModelInputs
 
 current_directory: Path = Path(__file__).parent
-model_directory: Path = current_directory.parent  # NOTE: bodge
+model_directory: Path = current_directory.parent
 
 model_directory_label: str = "R1b_retrieval"
 

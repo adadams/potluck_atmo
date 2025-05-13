@@ -8,7 +8,7 @@ from compile_crosssection_data import curate_crosssection_catalog
 from compile_vertical_structure import compile_vertical_structure_for_forward_model
 from user.input_structs import UserForwardModelInputs
 
-model_directory_label: str = "R1b_retrieval"
+model_directory_label: str = "R1c_retrieval"
 
 project_directory: Path = Path.cwd()
 user_directory: Path = project_directory / "user"

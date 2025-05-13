@@ -26,28 +26,26 @@ potluck_directory: Path = user_directory.parent
 ################### FORWARD MODEL DATA ###################
 model_directory_label: str = "R1b_retrieval"
 
-# opacity_catalog: str = "wide"
-
-# opacity_data_directory: Path = Path("/Volumes/Orange") / "Opacities_0v10" / "gases"
-# opacity_data_directory: Path = Path("/media/gba8kj/Orange") / "Opacities_0v10" / "gases"
-
-# catalog_filepath: Path = opacity_data_directory / f"{opacity_catalog}.nc"
-# crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(catalog_filepath)
-
-# crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(
-#    input_files_directory
-#    # Path("/Volumes/Orange")
-#    / "R1b_retrieval_precurated_crosssection_catalog_nonfixed_TP.nc"
-# )
-
 precurated_crosssection_catalog_dataset_filepath: Path = (
     input_files_directory / "R1b_retrieval_precurated_crosssection_catalog.nc"
 )
-precurated_crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(
-    precurated_crosssection_catalog_dataset_filepath
-).crosssections
 
-crosssection_catalog_dataset: xr.Dataset = precurated_crosssection_catalog_dataset
+# if file exists, set it as the crosssection_catalog_dataset
+try:
+    precurated_crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(
+        precurated_crosssection_catalog_dataset_filepath
+    ).crosssections
+    crosssection_catalog_dataset: xr.Dataset = precurated_crosssection_catalog_dataset
+
+except FileNotFoundError:
+    opacity_catalog: str = "wide"
+
+    opacities_directory: Path = Path("/Volumes/Orange") / "Opacities_0v10"
+    # opacities_directory: Path = Path("/media/gba8kj/Orange") / "Opacities_0v10"
+    opacity_data_directory: Path = opacities_directory / "gases"
+
+    catalog_filepath: Path = opacity_data_directory / f"{opacity_catalog}.nc"
+    crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(catalog_filepath)
 
 data_dataset_filepath: Path = current_directory / "T3B_APOLLO_truncated.nc"
 data_dataset: xr.Dataset = xr.open_dataset(data_dataset_filepath)
