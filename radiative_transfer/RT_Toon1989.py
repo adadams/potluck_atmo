@@ -128,8 +128,7 @@ def RT_Toon1989(
 
 @dataclass
 class DsolverInputs:
-    # cp, cpm1, cm, cmm1, ep, btop, bottom, gama
-    cp: NDArray[np.float64]  # size of array:
+    cp: NDArray[np.float64]
     cpm1: NDArray[np.float64]
     cm: NDArray[np.float64]
     cmm1: NDArray[np.float64]
@@ -137,6 +136,7 @@ class DsolverInputs:
     btop: NDArray[np.float64]
     bottom: NDArray[np.float64]
     gama: NDArray[np.float64]
+    rsf: float = 0
 
 
 def calculate_terms_for_DSolver(
