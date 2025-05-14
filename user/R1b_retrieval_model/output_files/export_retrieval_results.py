@@ -76,3 +76,10 @@ results_dataset: xr.Dataset = xr.merge(
 )
 
 results_dataset.to_netcdf(current_directory / f"{retrieval_run_name}_results.nc")
+
+MLE_dataset: xr.Dataset = results_dataset.isel(
+    sample=np.argmax(log_likelihoods)
+).drop_vars(["log_likelihood", "log_weight"])
+print(f"{MLE_dataset=}")
+
+MLE_dataset.to_netcdf(current_directory / f"{retrieval_run_name}_MLE.nc")

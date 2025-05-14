@@ -98,11 +98,11 @@ class ModelFreeParameters(TypedDict):
     log10_constant_error_inflation_term: float
 
 
-def evaluate_log_likelihood_with_free_parameters(
+def prepare_model_for_likelihood_evaluation(
     free_parameters: ModelFreeParameters,
     resampling_fwhm_fraction: float = fraction_of_reddest_fwhm_to_convolve_with,
     data_dataset: xr.Dataset = data,
-) -> float:
+) -> xr.Dataset:
     # unpack dict of free parameters
     planet_radius_relative_to_earth: float = free_parameters[
         "planet_radius_relative_to_earth"
@@ -137,8 +137,32 @@ def evaluate_log_likelihood_with_free_parameters(
         log10_constant_error_inflation_term,
     )
 
+    return xr.Dataset(
+        {
+            "transit_model": transit_depths_sampled_to_data,
+            "transit_data": data_dataset.data,
+            "scaled_transit_data_error": inflated_data_errors,
+        }
+    )
+
+
+def evaluate_log_likelihood_with_free_parameters(
+    free_parameters: ModelFreeParameters,
+    resampling_fwhm_fraction: float = fraction_of_reddest_fwhm_to_convolve_with,
+    data_dataset: xr.Dataset = data,
+) -> float:
+    prepared_model: xr.Dataset = prepare_model_for_likelihood_evaluation(
+        free_parameters=free_parameters,
+        resampling_fwhm_fraction=resampling_fwhm_fraction,
+        data_dataset=data_dataset,
+    )
+
+    transit_depths_sampled_to_data: xr.DataArray = prepared_model.transit_model
+    transit_data: xr.DataArray = prepared_model.transit_data
+    scaled_transit_data_errors: xr.DataArray = prepared_model.scaled_transit_data_error
+
     log_likelihood: float = calculate_log_likelihood(
-        transit_depths_sampled_to_data, data_dataset.data, inflated_data_errors
+        transit_depths_sampled_to_data, transit_data, scaled_transit_data_errors
     ).item()
 
     return log_likelihood
