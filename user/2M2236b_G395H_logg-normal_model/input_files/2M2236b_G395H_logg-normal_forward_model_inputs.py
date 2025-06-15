@@ -37,7 +37,10 @@ catalog_filepath: Path = opacity_data_directory / f"{opacity_catalog}.nc"
 crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(catalog_filepath)
 
 reference_model_filepath: Path = (
-    model_directory / "2M2236b_NIRSpec_G395H_R500_APOLLO.nc"
+    input_files_directory
+    / "reference_inputs"
+    / "G395H"
+    / "2M2236b_NIRSpec_G395H_R500_APOLLO.nc"
 )
 # reference_model_filepath: Path = model_directory / "reference_data_wavelengths.nc"
 reference_model: xr.Dataset = xr.open_dataset(reference_model_filepath)

@@ -28,6 +28,7 @@ user/test_*
 !user/R1c_retrieval_model/input_files/R1c_retrieval_precurated_crosssection_catalog.nc
 !user/R1c_retrieval_model/intermediate_outputs/*
 !user/R1c_retrieval_model/output_files/*
+!user/2M2236b_G395H_logg-normal_model/**/*.nc
 test_opacity_tables.py
 material/gases/reference_data/picaso_lupu_temperature_levels.py
 compare_nearly_isothermal_spectra.py
