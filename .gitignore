@@ -1,7 +1,12 @@
 .DS_Store
 *.pyc
 syncthing*
+__pycache__
 
+
+experimental/
+
+material/clouds/*
 material/gases/reference_data/*.nc
 
 scratch_work/
@@ -31,3 +36,5 @@ calculate_Wills_simplified_Ross458c_model.py
 calculate_test_2M2236b_model.py
 calculate_ATMO_model.py
 compare_isothermal_spectra.py
+
+**/*nautilus.hdf5

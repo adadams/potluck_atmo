@@ -1,0 +1,53 @@
+[header]
+Mode = 'Resolved'
+Object = '2M2236.Piette.G395H.cloud-free.2024-02-27.continuation'
+Parallel = true
+Data = '/rhome/arthura/APOLLO/data/2M2236b_NIRSpec_G395H_R500_APOLLO.dat'
+Convolve = 1
+Binning = 1
+Degrade = 1
+Sampler = 'dynesty'
+Checkpoint = '/rhome/arthura/bigdata/samples/2M2236.Piette.G395H.cloud-free.2024-02-27.dynesty_checkpoint.dat'
+N_Steps = 500000
+Star = [ 6516, 1.86, 600 ]
+Location = [ 63.0, 184.46, -55.97 ]
+Mass_Limits = [ 0.5, 1e15 ]
+Tables = [ 'jwst50k', 'lores' ]
+Pressure = [ -4.0, 2.5 ]
+Streams = 2
+Prior = 'Uniform'
+Output = '/rhome/arthura/bigdata/samples'
+Opacities = '/rhome/arthura/bigdata/APOLLO_data/Opacities_0v10'
+
+[parameters.Basic]
+Rad =      { MLE=11.44, Mu=19.41, Sigma=0.02, Min=5.00, Max=50.00, Lower=0.02, Higher=0.02 }
+'Log(g)' = { MLE=4.50,  Mu=4.19,  Sigma=0.40, Min=3.00, Max=7.00,  Lower=0.00, Higher=0.00 }
+
+[parameters.Gases]
+options = 'h2only'
+h2o =      { MLE=-3.18, Mu=-3.60, Sigma=0.03, Min=-12.00, Max=-1.00, Lower=0.02, Higher=0.03 }
+co =       { MLE=-3.83, Mu=-3.52, Sigma=0.04, Min=-12.00, Max=-1.00, Lower=0.04, Higher=0.04 }
+co2 =      { MLE=-6.96, Mu=-6.96, Sigma=0.01, Min=-12.00, Max=-1.00, Lower=0.01, Higher=0.01 }
+ch4 =      { MLE=-3.54, Mu=-3.54, Sigma=0.01, Min=-12.00, Max=-1.00, Lower=0.01, Higher=0.01 }
+Lupu_alk = { MLE=-5.46, Mu=-6.25, Sigma=0.03, Min=-12.00, Max=-1.00, Lower=0.01, Higher=0.01 }
+h2s =      { MLE=-4.56, Mu=-4.56, Sigma=0.01, Min=-12.00, Max=-1.00, Lower=0.01, Higher=0.01 }
+nh3 =      { MLE=-3.54, Mu=-3.54, Sigma=0.01, Min=-12.00, Max=-1.00, Lower=0.01, Higher=0.01 }
+
+[parameters.Atm]
+options = 'piette'
+T_m4 =  { MLE=433.095329,  Mu=1967.14, Sigma=5.42,  Min=100.00, Max=4000.00, Lower=7.41,   Higher=5.42 }
+T_m3 =  { MLE=481.868528,  Mu=3627.54, Sigma=98.41, Min=100.00, Max=4000.00, Lower=148.57, Higher=98.41 }
+T_m2 =  { MLE=557.843874,  Mu=3792.56, Sigma=34.27, Min=100.00, Max=4000.00, Lower=25.99,  Higher=34.27 }
+T_m1 =  { MLE=705.230919,  Mu=1967.14, Sigma=5.42,  Min=100.00, Max=4000.00, Lower=7.41,   Higher=5.42 }
+T_0 =   { MLE=1127.597652, Mu=3627.54, Sigma=98.41, Min=100.00, Max=4000.00, Lower=148.57, Higher=98.41 }
+T_0p5 = { MLE=1412.647250, Mu=3792.56, Sigma=34.27, Min=100.00, Max=4000.00, Lower=25.99,  Higher=34.27 }
+T_1 =   { MLE=1781.538772, Mu=3792.56, Sigma=34.27, Min=100.00, Max=4000.00, Lower=25.99,  Higher=34.27 }
+T_1p5 = { MLE=2382.715910, Mu=3792.56, Sigma=34.27, Min=100.00, Max=4000.00, Lower=25.99,  Higher=34.27 }
+T_2 =   { MLE=3440.880515, Mu=3792.56, Sigma=34.27, Min=100.00, Max=4000.00, Lower=25.99,  Higher=34.27 }
+T_2p5 = { MLE=4000.000000, Mu=3792.56, Sigma=34.27, Min=100.00, Max=4000.00, Lower=25.99,  Higher=34.27 }
+
+[parameters.End]
+deltaL =        { MLE=0.00,   Mu=4.15,   Sigma=0.01, Min=-5.00,   Max=5.00, Lower=0.09, Higher=0.00 }
+scaleG395_ch1 = { MLE=1.00,   Mu=1.00,   Sigma=0.01, Min=0.75,    Max=1.25, Lower=0.01, Higher=0.01 }
+scaleG395_ch2 = { MLE=1.00,   Mu=1.00,   Sigma=0.01, Min=0.75,    Max=1.25, Lower=0.01, Higher=0.01 }
+logf =          { MLE=-10.00, Mu=-10.00, Sigma=0.10, Min=-100.00, Max=5.00, Lower=0.00, Higher=0.00 }

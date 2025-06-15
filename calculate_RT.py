@@ -204,6 +204,91 @@ def calculate_observed_fluxes(
     }
 
 
+def calculate_observed_fluxes_via_two_stream(
+    user_forward_model_inputs: UserForwardModelInputs,
+    precalculated_crosssection_catalog: Optional[xr.Dataset] = None,
+) -> XarrayOutputs:
+    compiled_vertical_dataset: ForwardModelXarrayInputs = (
+        compile_vertical_structure_for_forward_model(
+            user_vertical_inputs=user_forward_model_inputs.vertical_inputs
+        )
+    )
+    vertical_structure_dataset_by_level: xr.Dataset = compiled_vertical_dataset.by_level
+    vertical_structure_dataset_by_layer: xr.Dataset = compiled_vertical_dataset.by_layer
+
+    temperatures_by_level: xr.DataArray = (
+        vertical_structure_dataset_by_level.temperature
+    )
+
+    pressures_by_layer: xr.DataArray = vertical_structure_dataset_by_layer.pressure
+
+    number_densities_by_layer: xr.DataArray = (
+        vertical_structure_dataset_by_layer.number_density
+    )
+
+    if precalculated_crosssection_catalog is None:
+        temperatures_by_layer: xr.DataArray = (
+            vertical_structure_dataset_by_layer.temperature
+        )
+
+        species_present_in_model: list[str] = number_densities_by_layer.species.values
+
+        crosssection_catalog_dataset_interpolated_to_model: xr.Dataset = curate_crosssection_catalog(
+            crosssection_catalog_dataset=user_forward_model_inputs.crosssection_catalog,
+            temperatures_by_layer=temperatures_by_layer,
+            pressures_by_layer=pressures_by_layer,
+            species_present_in_model=species_present_in_model,
+        )
+
+    else:
+        crosssection_catalog_dataset_interpolated_to_model: xr.Dataset = (
+            precalculated_crosssection_catalog
+        )
+
+    model_wavelengths_in_microns: xr.DataArray = (
+        crosssection_catalog_dataset_interpolated_to_model.wavelength
+    )
+    model_wavelengths_in_cm = model_wavelengths_in_microns * MICRONS_TO_CM
+
+    thermal_intensities_by_layer: xr.Dataset = (
+        compile_thermal_structure_for_forward_model(
+            temperatures_by_level=temperatures_by_level,
+            pressures_by_layer=pressures_by_layer,
+            model_wavelengths_in_microns=model_wavelengths_in_microns,
+        )
+    )
+
+    path_lengths_in_cm: xr.DataArray = user_forward_model_inputs.path_lengths_by_layer
+
+    two_stream_parameters: TwoStreamParameters = (
+        compile_composite_two_stream_parameters(
+            wavelengths_in_cm=model_wavelengths_in_cm,
+            crosssections=crosssection_catalog_dataset_interpolated_to_model,
+            number_density=number_densities_by_layer,
+            path_lengths=path_lengths_in_cm,
+        )
+    )
+
+    RT_Toon1989_inputs: RTToon1989Inputs = RTToon1989Inputs(
+        thermal_intensity=thermal_intensities_by_layer.thermal_intensity,
+        delta_thermal_intensity=thermal_intensities_by_layer.delta_thermal_intensity,
+        **asdict(two_stream_parameters),
+    )
+
+    emitted_twostream_flux: xr.DataArray = RT_Toon1989(*astuple(RT_Toon1989_inputs))
+
+    observed_twostream_flux: xr.DataArray = (
+        emitted_twostream_flux
+        * (
+            user_forward_model_inputs.vertical_inputs.planet_radius_in_cm
+            / user_forward_model_inputs.distance_to_system_in_cm
+        )
+        ** 2
+    ).rename("observed_twostream_flux")
+
+    return observed_twostream_flux
+
+
 def resample_observed_fluxes(
     observed_fluxes: dict[str, xr.DataArray],
     reference_model_wavelengths: xr.DataArray,

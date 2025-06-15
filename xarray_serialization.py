@@ -86,6 +86,13 @@ class PressureCoordinate(XarrayVariable):
     attrs: dict[str, Any]  # = {"units": PressureUnits}
 """
 
+AltitudeValue: TypeAlias = Annotated[float, msgspec.Meta(ge=0)]
+TemperatureValue: TypeAlias = Annotated[float, msgspec.Meta(gt=0)]
+PressureValue: TypeAlias = Annotated[float, msgspec.Meta(ge=0)]
+LogPressureValue: TypeAlias = float
+MixingRatioValue: TypeAlias = Annotated[float, msgspec.Meta(ge=0, le=1)]
+LogMixingRatioValue: TypeAlias = Annotated[float, msgspec.Meta(le=0)]
+
 
 def convert_xarray_to_msgspec(dataset: xr.Dataset) -> dict:
     return dataset.to_dict()
