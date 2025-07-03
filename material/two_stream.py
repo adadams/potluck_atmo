@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from dataclasses import dataclass
 
 import xarray as xr
 
@@ -12,11 +12,12 @@ from material.scattering.types import TwoStreamScatteringCoefficients
 from material.types import TwoStreamParameters, TwoStreamScatteringParameters
 
 
-class TwoStreamInputs(NamedTuple):
+@dataclass
+class TwoStreamInputs:
     forward_scattering_coefficients: xr.DataArray
     backward_scattering_coefficients: xr.DataArray
     absorption_coefficients: xr.DataArray
-    path_length: xr.DataArray
+    # path_length: xr.DataArray
 
 
 def compile_two_stream_parameters(

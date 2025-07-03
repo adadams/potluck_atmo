@@ -3,16 +3,61 @@ from dataclasses import dataclass, field
 from functools import partial, reduce, wraps
 from inspect import signature
 from pathlib import Path
-from typing import Any, NamedTuple, Optional, Protocol, TypeAlias
+from typing import (
+    Annotated,
+    Any,
+    Final,
+    Literal,
+    NamedTuple,
+    Optional,
+    Protocol,
+    TypeAlias,
+)
 
 import xarray as xr
 from decopatch import DECORATED, function_decorator
 
-from xarray_serialization import (
-    ArgumentDimensionType,
-    DimensionAnnotation,
-    XarrayDimension,
-)
+XarrayDimension: TypeAlias = tuple[str, ...]
+XarrayData: TypeAlias = list[float]
+
+"""
+Ideas to jot down here for easy reference:
+xarray dataset print-outs (reprs) already show
+shape and structure information under "dimensions"
+that look a lot like they could be annotations in
+something like nptyping.
+
+
+N = TypeVar("N", tuple[int, ...])
+
+
+class PreservesNumberofElements(Protocol):
+    def __call__(
+        xarray_data: XarrayData[XarrayDimension[N]],
+    ) -> XarrayData[XarrayDimension[N]]: ...
+"""
+
+BaseUnits: TypeAlias = Literal["[mass]", "[time]", "[length]", "[temperature]"]
+BaseUnitType: TypeAlias = Annotated[str, BaseUnits]
+UnitType: TypeAlias = tuple[tuple[BaseUnitType, int]]
+
+PressureUnits: UnitType = (("[mass]", 1), ("[time]", -2), ("[length]", -1))
+# PressureData: TypeAlias = NDArray[Shape["number_of_pressures"], Float]  # noqa: F821
+
+WavelengthUnits: UnitType = (("[length]", 1),)
+# WavelengthData: TypeAlias = NDArray[Shape["number_of_wavelengths"], Float]  # noqa: F821
+
+DimensionlessUnits: UnitType = (("", 1),)
+
+DimensionAnnotation: TypeAlias = tuple[str, UnitType]
+
+WavelengthType: DimensionAnnotation = ("wavelength", WavelengthUnits)
+PressureType: DimensionAnnotation = ("pressure", PressureUnits)
+SpeciesType: DimensionAnnotation = ("species", DimensionlessUnits)
+CosineAngleType: DimensionAnnotation = ("cosine_angle", DimensionlessUnits)
+
+ArgumentDimensionType: TypeAlias = tuple[DimensionAnnotation]
+FunctionDimensionType: TypeAlias = tuple[ArgumentDimensionType]
 
 # NOTE to self: assess whether we can develop a version of these that uses xr.apply_ufunc;
 # maybe partialing apply_ufunc with everything except *args. Can we get away with this without kwargs?
@@ -118,7 +163,9 @@ class Dimensionalize:
             )
         )
 
-        self.vectorizable: bool = True
+        self.vectorizable: bool = (
+            False  # ADA: changed default to False for numba version only
+        )
 
     def __call__(self, function: Callable[[Any], Any]):
         @wraps(function)
@@ -129,7 +176,51 @@ class Dimensionalize:
                 kwargs=kwargs,
                 input_core_dims=self._argument_dimension_names,
                 output_core_dims=self._result_dimension_names,
-                vectorize=self.vectorizable,
+                # vectorize=self.vectorizable,
+                vectorize=False,
+            )
+
+        return apply_ufunc_wrapper
+
+
+# Define the specific signature for RT_Toon1989 as a constant
+# Input arguments:
+# 5 x (wavelength, pressure) -> (i,j)
+# 2 x (cosine_angle,) -> () (as apply_ufunc(vectorize=False) slices these to scalars)
+# Output argument:
+# 1 x (wavelength,) -> (i)
+RT_TOON1989_SIGNATURE: Final[str] = "(i,j), (i,j), (i,j), (i,j), (i,j), (), () -> (i)"
+
+
+@dataclass
+class DimensionalizeRTToon1989(
+    Dimensionalize
+):  # Inherit from the original Dimensionalize
+    """
+    A bespoke Dimensionalize decorator specifically for RT_Toon1989.
+    It hardcodes the function signature and sets vectorize=False
+    to ensure proper interaction with Numba-jitted code.
+    """
+
+    # We don't need __init__ if we just want to override __post_init__ or __call__
+    # but for clarity, ensure parent's setup is used.
+    def __post_init__(self):
+        # Call the parent's post_init to set up argument_dimension_names etc.
+        super().__post_init__()
+        # Override vectorizable to False, as per our analysis for RT_Toon1989
+        self.vectorizable = False
+
+    def __call__(self, function: Callable[[Any], Any]):
+        @wraps(function)
+        def apply_ufunc_wrapper(*args, **kwargs):
+            return xr.apply_ufunc(
+                function,
+                *args,
+                kwargs=kwargs,
+                input_core_dims=self._argument_dimension_names,
+                output_core_dims=self._result_dimension_names,
+                vectorize=self.vectorizable,  # This will be False
+                signature=RT_TOON1989_SIGNATURE,  # <--- HARDCODED SIGNATURE FOR THIS SPECIFIC FUNCTION
             )
 
         return apply_ufunc_wrapper

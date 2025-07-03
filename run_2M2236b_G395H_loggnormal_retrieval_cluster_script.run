@@ -1,0 +1,23 @@
+#!/bin/sh
+
+#“#SBATCH” directives that convey submission options:
+#SBATCH --job-name=2M2236b_G395H_loggnormal
+#SBATCH --mail-user=gba8kj@virginia.edu
+#SBATCH --mail-type=ALL
+#SBATCH --account=uva_exoplanet
+#SBATCH --partition=standard
+#SBATCH --time=6-23:59:59
+#SBATCH --ntasks=48
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=15g
+
+if [ -n "$SLURM_JOB_NODELIST" ]; then echo $SLURM_JOB_NODELIST; fi
+if [ -n "$SLURM_SUBMIT_DIR" ]; then cd $SLURM_SUBMIT_DIR; fi
+
+conda activate potluck
+
+echo running $(which python) ...
+echo -n "running "
+
+cd $HOME/potluck_atmo
+mpiexec -n $SLURM_NTASKS python -m mpi4py.futures $HOME/potluck_atmo/run_2M2236b_G395H_loggnormal_retrieval_on_UVA_cluster.py > $HOME/storage/logs/2M2236b_G395H_loggnormal_retrieval_2025-06-15.log

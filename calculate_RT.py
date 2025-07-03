@@ -22,7 +22,7 @@ from radiative_transfer.RT_one_stream import (
     OneStreamRTInputs,
     calculate_spectral_intensity_at_surface,
 )
-from radiative_transfer.RT_Toon1989 import RT_Toon1989, RTToon1989Inputs
+from radiative_transfer.RT_Toon1989_jax import RT_Toon1989, RTToon1989Inputs
 from spectrum.bin import resample_spectral_quantity_to_new_wavelengths
 from user.input_structs import UserForwardModelInputs
 from xarray_functional_wrappers import XarrayOutputs

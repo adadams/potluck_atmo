@@ -28,6 +28,7 @@ class ModelFreeParameters(TypedDict):
     deep_scaled_temperature_3: float
     flux_scaled_error_inflation_factor: float
     log10_constant_error_inflation_term: float
+    fraction_of_reddest_fwhm_to_convolve_with: float
     NRS1_flux_scale_factor: float
     NRS2_flux_scale_factor: float
 
@@ -36,7 +37,7 @@ project_directory: Path = Path.cwd()
 current_directory: Path = Path(__file__).parent
 
 retrieval_run_name: str = "2M2236b_G395H_logg-normal"
-run_date_tag: str = "2025Jun09_12:22:30"
+run_date_tag: str = "2025Jun15_19:50:01"
 retrieval_run_prefix: str = f"{retrieval_run_name}_{run_date_tag}"
 
 sampled_points_filepath: Path = current_directory / f"{retrieval_run_prefix}_points.npy"

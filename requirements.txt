@@ -4,12 +4,14 @@ corner==2.2.3
 dask==2025.4.1
 decopatch==1.4.10
 h5py==3.12.1
+jax==0.4.35
 matplotlib==3.10.3
+mpi4py==4.0.3
 msgspec==0.19.0
 nautilus-sampler==1.0.5
 netcdf4==1.7.2
 numba==0.61.2
-numpy==2.2.5
+numpy==2.2.6
 Pint==0.24.4
 scipy==1.15.3
 spectres==2.2.2

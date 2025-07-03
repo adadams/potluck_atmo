@@ -313,7 +313,7 @@ def DTRIDGL_subroutine(
         ) * xx
 
     xki_terms: NDArray[np.float64] = np.empty_like(ds_terms)
-    xki_terms[0] = ds_terms[0]
+    xki_terms[:, 0] = ds_terms[:, 0]
 
     for half_layer, (as_term, ds_term) in enumerate(
         zip(as_terms[*upper_edges].T, ds_terms[*upper_edges].T)

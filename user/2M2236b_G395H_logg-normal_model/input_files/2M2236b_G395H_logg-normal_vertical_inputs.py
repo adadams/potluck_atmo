@@ -247,27 +247,6 @@ def build_uniform_model_inputs(
         kwargs={"lower_bound": 75.0, "upper_bound": 3975.0},
     )
 
-    temperatures_by_level_as_xarray: xr.DataArray = (
-        xr.apply_ufunc(
-            retrieval_TP_model,
-            0.2889458091719745,
-            np.array([0.11159102, 0.02182628, 0.12510834, 0.10768672, 0.01539343]),
-            np.array(
-                [0.02514635, 0.01982915, 0.06249186, 0.32445998]
-            ),  # last entry would have been 0.32445998
-            log_pressures_by_level_as_xarray,
-            input_core_dims=[[], ["downward"], ["upward"], ["pressure"]],
-            output_core_dims=[["pressure"]],
-            exclude_dims={"downward", "upward"},
-            vectorize=True,
-            kwargs={"lower_bound": 75.0, "upper_bound": 4000.0},
-        )
-        .assign_attrs(
-            units="K",
-        )
-        .rename("temperature")
-    )
-
     default_mixing_ratios_by_level_as_xarray: xr.Dataset = xr.Dataset(
         data_vars={
             mixing_ratio_name: xr.DataArray(

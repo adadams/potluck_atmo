@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from model_statistics.calculate_statistics import (
     calculate_reduced_chi_squared_statistic,
 )
-from run_2M2236b_G395H_loggnormal_retrieval import (
+from run_2M2236b_G395H_loggnormal_retrieval_on_UVA_cluster import (
     prepare_model_for_likelihood_evaluation as evaluate_2M2236_JWST_loggnormal_model,
 )
 
@@ -16,7 +16,7 @@ project_directory: Path = Path.cwd()
 user_directory: Path = project_directory / "user"
 
 run_names: list[str] = ["2M2236b_G395H_logg-normal"]
-run_times: list[str] = ["2025Jun09_12:22:30"]
+run_times: list[str] = ["2025Jun15_19:50:01"]
 run_prefixes: list[str] = [
     f"{run_name}_{run_time}" for run_name, run_time in zip(run_names, run_times)
 ]
@@ -50,6 +50,7 @@ for run_name, run_prefix, model_function, axis, plot_color in zip(
         apollo_model.flux,
         label="Apollo model from original Apollo-fit parameters",
         color="dodgerblue",
+        zorder=2,
     )
 
     MLE_parameter_filepath: Path = output_file_directory / f"{run_prefix}_MLE.nc"
@@ -64,7 +65,7 @@ for run_name, run_prefix, model_function, axis, plot_color in zip(
         ].items()
     }
 
-    MLE_parameters_as_inputs["fraction_of_reddest_fwhm_to_convolve_with"] = 1.00
+    # MLE_parameters_as_inputs["fraction_of_reddest_fwhm_to_convolve_with"] = 1.00
 
     model_dataset: xr.Dataset = model_function(MLE_parameters_as_inputs)
     print(f"{model_dataset=}")
@@ -73,9 +74,9 @@ for run_name, run_prefix, model_function, axis, plot_color in zip(
     number_of_free_parameters: int = len(MLE_parameters.data_vars)
 
     reduced_chi_squared_statistic: float = calculate_reduced_chi_squared_statistic(
+        model_dataset.emission_model,
         model_dataset.emission_data,
         model_dataset.scaled_emission_data_error,
-        model_dataset.emission_model,
         number_of_free_parameters,
     )
     print(
@@ -90,6 +91,7 @@ for run_name, run_prefix, model_function, axis, plot_color in zip(
         fmt="o",
         elinewidth=2,
         capsize=4,
+        zorder=1,
     )
 
     axis.plot(
@@ -98,7 +100,7 @@ for run_name, run_prefix, model_function, axis, plot_color in zip(
         color=plot_color,
         linewidth=2,
         label=run_name,
-        zorder=10,
+        zorder=3,
     )
 
     axis.set_xlabel("Wavelength (microns)")
@@ -126,4 +128,6 @@ for run_name, run_prefix, model_function, axis, plot_color in zip(
     #    transform=axis.transAxes,
     # )
 
-plt.savefig(user_directory / "2M2236b_MLE_spectra_conv3.00.pdf", bbox_inches="tight")
+plt.savefig(
+    user_directory / f"2M2236b_MLE_spectra_{run_prefix}.pdf", bbox_inches="tight"
+)

@@ -16,3 +16,6 @@ Test RT scheme:
   ✔ Changing the maximum exponential cutoff (MAXIMUM_EXP_FLOAT in RT_Toon1989.py) affects how the (seemingly wrong) spectrum looks. Increasing it to effectively no cutoff reduces the anomalous alkali spike (where it should be an absorption feature). Turning the exponent lower ends up reaching the no-Rayleigh case as a limit. Maybe there's some competing exponents at high values? @done(24-11-19 18:22)
   ✔ There might be a wavenumber/wavelength problem with the gas optical depths, or an array being reversed. @done(24-11-19 18:22)
   ☐ We need to do a very stripped-back test of each RT scheme. Fully isothermal, H2-only atmosphere, compare with both APOLLO and PICASO.
+
+Retrieval setup:
+  ☐ 

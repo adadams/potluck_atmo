@@ -10,7 +10,7 @@ current_directory: Path = Path(__file__).parent
 plt.style.use(project_directory / "arthur.mplstyle")
 
 retrieval_run_name: str = "2M2236b_G395H_logg-normal"
-run_date_tag: str = "2025Jun09_12:22:30"
+run_date_tag: str = "2025Jun15_19:50:01"
 retrieval_run_prefix: str = f"{retrieval_run_name}_{run_date_tag}"
 
 sampled_points_filepath: Path = current_directory / f"{retrieval_run_prefix}_points.npy"
@@ -45,6 +45,7 @@ plot_labels: list[str] = [
     r"$T_{\rm{deep 3}}$",
     r"$E_1$",
     r"$\log_{10}\!\left(E_0\right)$",
+    r"$f_\mathrm{conv}$",
     r"$F_\mathrm{NRS1}$",
     r"$F_\mathrm{NRS2}$",
 ]

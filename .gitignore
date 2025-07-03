@@ -39,3 +39,12 @@ calculate_ATMO_model.py
 compare_isothermal_spectra.py
 
 **/*nautilus.hdf5
+speed_test_numba_RT.py
+user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_MLE.nc
+user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_points.npy
+user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_results.nc
+user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_log_l.npy
+user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_log_w.npy
+user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_log_z.npy
+.gitignore
+user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_loggnormal_retrieval_2025-06-15.log
