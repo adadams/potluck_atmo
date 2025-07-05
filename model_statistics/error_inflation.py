@@ -1,17 +1,17 @@
 import numpy as np
 
 from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import WavelengthType
+from xarray_serialization import WavelengthDimension
 
 
 @Dimensionalize(
     argument_dimensions=(
-        (WavelengthType,),
-        (WavelengthType,),
+        (WavelengthDimension,),
+        (WavelengthDimension,),
         None,
         None,
     ),
-    result_dimensions=((WavelengthType,),),
+    result_dimensions=((WavelengthDimension,),),
 )
 def inflate_errors_by_flux_scaling(
     flux: np.ndarray,

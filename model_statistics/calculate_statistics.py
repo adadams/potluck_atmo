@@ -1,14 +1,14 @@
 import numpy as np
 
 from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import WavelengthType
+from xarray_serialization import WavelengthDimension
 
 
 @Dimensionalize(
     argument_dimensions=(
-        (WavelengthType,),
-        (WavelengthType,),
-        (WavelengthType,),
+        (WavelengthDimension,),
+        (WavelengthDimension,),
+        (WavelengthDimension,),
     ),
     result_dimensions=(None,),
 )
@@ -22,9 +22,9 @@ def calculate_log_likelihood(
 
 @Dimensionalize(
     argument_dimensions=(
-        (WavelengthType,),
-        (WavelengthType,),
-        (WavelengthType,),
+        (WavelengthDimension,),
+        (WavelengthDimension,),
+        (WavelengthDimension,),
         None,
     ),
     result_dimensions=(None,),

@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 
 from constants_and_conversions import c, hc, hc_over_k
 from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import PressureType, WavelengthType
+from xarray_serialization import PressureDimension, WavelengthDimension
 
 
 def blackbody_intensity_by_wavelength(
@@ -24,10 +24,13 @@ class ThermalIntensityByLayer(NamedTuple):
 
 @Dimensionalize(
     argument_dimensions=(
-        (WavelengthType, PressureType),
-        (WavelengthType, PressureType),
+        (WavelengthDimension, PressureDimension),
+        (WavelengthDimension, PressureDimension),
     ),
-    result_dimensions=((WavelengthType, PressureType), (WavelengthType, PressureType)),
+    result_dimensions=(
+        (WavelengthDimension, PressureDimension),
+        (WavelengthDimension, PressureDimension),
+    ),
 )
 def calculate_thermal_intensity_by_layer(
     wavelength_grid_in_cm: NDArray[np.float64],

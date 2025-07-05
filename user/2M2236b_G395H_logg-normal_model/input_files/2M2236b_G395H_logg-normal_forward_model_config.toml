@@ -1,0 +1,4 @@
+[vertical.structure.temperature.models_experimental_uniform.piette]
+initial_temp_sample = 0.2889458091719745
+proportions_down = [0.11159102, 0.02182628, 0.12510834, 0.10768672, 0.01539343] # shallow scaled temperatures
+proportions_up = [0.02514635, 0.01982915, 0.06249186, 0.32445998] # deep scaled temperatures

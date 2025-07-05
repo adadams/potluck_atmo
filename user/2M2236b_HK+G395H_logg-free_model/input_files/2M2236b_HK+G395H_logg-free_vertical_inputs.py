@@ -6,7 +6,7 @@ import xarray as xr
 from numpy.typing import NDArray
 
 from constants_and_conversions import EARTH_RADIUS_IN_CM
-from material.mixing_ratios import uniform_log_mixing_ratios
+from material.mixing_ratios import generate_uniform_mixing_ratios
 from temperature.models import piette as TP_model
 from user.input_importers import import_model_id
 from user.input_structs import UserVerticalModelInputs
@@ -54,7 +54,7 @@ uniform_log_abundances: dict[str, float] = {
     "nh3": -6.508948016,
 }
 
-mixing_ratios_by_level: dict[str, np.ndarray] = uniform_log_mixing_ratios(
+mixing_ratios_by_level: dict[str, np.ndarray] = generate_uniform_mixing_ratios(
     uniform_log_abundances=uniform_log_abundances,
     number_of_pressure_levels=len(pressures_by_level),
     filler_species="h2",

@@ -5,7 +5,7 @@ import numpy as np
 import xarray as xr
 from numpy.typing import NDArray
 
-from material.mixing_ratios import uniform_log_mixing_ratios
+from material.mixing_ratios import generate_uniform_mixing_ratios
 from user.input_importers import import_model_id
 from user.input_structs import UserVerticalModelInputs
 
@@ -75,10 +75,12 @@ def build_uniform_model_inputs(
     temperatures_by_level: NDArray[np.float64] = temperatures_by_level,
     filler_species: str = "h2he",
 ) -> UserVerticalModelInputs:
-    mixing_ratios_by_level: dict[str, NDArray[np.float64]] = uniform_log_mixing_ratios(
-        uniform_log_abundances=uniform_log_abundances,
-        number_of_pressure_levels=len(pressures_by_level),
-        filler_species=filler_species,
+    mixing_ratios_by_level: dict[str, NDArray[np.float64]] = (
+        generate_uniform_mixing_ratios(
+            uniform_log_abundances=uniform_log_abundances,
+            number_of_pressure_levels=len(pressures_by_level),
+            filler_species=filler_species,
+        )
     )
 
     planet_radius_in_cm_as_xarray: xr.DataArray = xr.DataArray(

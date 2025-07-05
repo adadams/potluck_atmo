@@ -7,7 +7,11 @@ from numpy.typing import NDArray
 
 from basic_functional_tools import interleave
 from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
-from xarray_serialization import CosineAngleType, PressureType, WavelengthType
+from xarray_serialization import (
+    CosineAngleDimension,
+    PressureDimension,
+    WavelengthDimension,
+)
 
 MAXIMUM_EXP_FLOAT: Final[float] = 5.0
 
@@ -80,15 +84,15 @@ class RTToon1989Inputs:
 @rename_and_unitize(new_name="emitted_twostream_flux", units="erg s^-1 cm^-3")
 @Dimensionalize(
     argument_dimensions=(
-        (WavelengthType, PressureType),
-        (WavelengthType, PressureType),
-        (WavelengthType, PressureType),
-        (WavelengthType, PressureType),
-        (WavelengthType, PressureType),
-        (CosineAngleType,),
-        (CosineAngleType,),
+        (WavelengthDimension, PressureDimension),
+        (WavelengthDimension, PressureDimension),
+        (WavelengthDimension, PressureDimension),
+        (WavelengthDimension, PressureDimension),
+        (WavelengthDimension, PressureDimension),
+        (CosineAngleDimension,),
+        (CosineAngleDimension,),
     ),
-    result_dimensions=((WavelengthType,),),
+    result_dimensions=((WavelengthDimension,),),
 )
 def RT_Toon1989(
     thermal_intensity: NDArray[np.float64],

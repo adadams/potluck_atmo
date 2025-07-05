@@ -4,7 +4,7 @@ from numpy.typing import NDArray
 
 from material.scattering.types import TwoStreamScatteringCoefficients
 from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import PressureType, WavelengthType
+from xarray_serialization import PressureDimension, WavelengthDimension
 
 REFERENCE_FREQUENCY_IN_HZ: float = 5.0872638e14
 C_IN_CGS: float = 2.99792458e10
@@ -14,16 +14,16 @@ C_IN_CGS: float = 2.99792458e10
 # arguments, since xarray will know how to use it.
 @Dimensionalize(
     argument_dimensions=(
-        (WavelengthType,),
+        (WavelengthDimension,),
         (
-            PressureType,
-            WavelengthType,
+            PressureDimension,
+            WavelengthDimension,
         ),
     ),
     result_dimensions=(
         (
-            PressureType,
-            WavelengthType,
+            PressureDimension,
+            WavelengthDimension,
         ),
     ),
 )
@@ -39,17 +39,17 @@ def calculate_rayleigh_scattering_crosssections(
 
 @Dimensionalize(
     argument_dimensions=(
-        (WavelengthType,),
+        (WavelengthDimension,),
         (
-            PressureType,
-            WavelengthType,
+            PressureDimension,
+            WavelengthDimension,
         ),
-        (PressureType,),
+        (PressureDimension,),
     ),
     result_dimensions=(
         (
-            WavelengthType,
-            PressureType,
+            WavelengthDimension,
+            PressureDimension,
         ),
     ),
 )

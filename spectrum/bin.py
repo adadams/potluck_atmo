@@ -46,11 +46,11 @@ convolve_and_resample_by_spectres = partial(
 
 # @Dimensionalize(
 #    argument_dimensions=(
-#        (WavelengthType,),
-#        (WavelengthType,),
-#        (WavelengthType,),
+#        (WavelengthDimension,),
+#        (WavelengthDimension,),
+#        (WavelengthDimension,),
 #    ),
-#    result_dimensions=((WavelengthType,),),
+#    result_dimensions=((WavelengthDimension,),),
 # )
 # TODO: write a separate wrapper for when dimensions change size.
 def resample_spectral_quantity_to_new_wavelengths(

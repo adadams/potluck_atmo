@@ -4,64 +4,23 @@ from functools import partial, reduce, wraps
 from inspect import signature
 from pathlib import Path
 from typing import (
-    Annotated,
     Any,
-    Final,
-    Literal,
+    List,
     NamedTuple,
     Optional,
     Protocol,
+    Tuple,
     TypeAlias,
 )
 
 import xarray as xr
 from decopatch import DECORATED, function_decorator
 
-XarrayDimension: TypeAlias = tuple[str, ...]
-XarrayData: TypeAlias = list[float]
+from basic_types import DimensionAnnotation
+from xarray_serialization import XarrayDimension
 
-"""
-Ideas to jot down here for easy reference:
-xarray dataset print-outs (reprs) already show
-shape and structure information under "dimensions"
-that look a lot like they could be annotations in
-something like nptyping.
-
-
-N = TypeVar("N", tuple[int, ...])
-
-
-class PreservesNumberofElements(Protocol):
-    def __call__(
-        xarray_data: XarrayData[XarrayDimension[N]],
-    ) -> XarrayData[XarrayDimension[N]]: ...
-"""
-
-BaseUnits: TypeAlias = Literal["[mass]", "[time]", "[length]", "[temperature]"]
-BaseUnitType: TypeAlias = Annotated[str, BaseUnits]
-UnitType: TypeAlias = tuple[tuple[BaseUnitType, int]]
-
-PressureUnits: UnitType = (("[mass]", 1), ("[time]", -2), ("[length]", -1))
-# PressureData: TypeAlias = NDArray[Shape["number_of_pressures"], Float]  # noqa: F821
-
-WavelengthUnits: UnitType = (("[length]", 1),)
-# WavelengthData: TypeAlias = NDArray[Shape["number_of_wavelengths"], Float]  # noqa: F821
-
-DimensionlessUnits: UnitType = (("", 1),)
-
-DimensionAnnotation: TypeAlias = tuple[str, UnitType]
-
-WavelengthType: DimensionAnnotation = ("wavelength", WavelengthUnits)
-PressureType: DimensionAnnotation = ("pressure", PressureUnits)
-SpeciesType: DimensionAnnotation = ("species", DimensionlessUnits)
-CosineAngleType: DimensionAnnotation = ("cosine_angle", DimensionlessUnits)
-
-ArgumentDimensionType: TypeAlias = tuple[DimensionAnnotation]
-FunctionDimensionType: TypeAlias = tuple[ArgumentDimensionType]
-
-# NOTE to self: assess whether we can develop a version of these that uses xr.apply_ufunc;
-# maybe partialing apply_ufunc with everything except *args. Can we get away with this without kwargs?
-# Could possibly do this with a decorator.
+ArgumentDimensionType: TypeAlias = Tuple[DimensionAnnotation]
+FunctionDimensionType: TypeAlias = Tuple[ArgumentDimensionType]
 
 
 def compose(*functions: Sequence[Callable]) -> Callable:
@@ -105,17 +64,17 @@ class NamesAndDimensionalities(NamedTuple):
 def separate_argument_dimension_into_names_and_dimensions(
     arguments_dimensions_set: ArgumentDimensionType,
 ) -> NamesAndDimensionalities:
-    arguments_dimensions_names: list[Optional[XarrayDimension]] = []
-    arguments_dimensions_dimensions: list[Optional[DimensionAnnotation]] = []
+    arguments_dimensions_names: List[Optional[XarrayDimension]] = []
+    arguments_dimensions_dimensions: List[Optional[DimensionAnnotation]] = []
 
     for argument_dimensions_set in arguments_dimensions_set:
         if argument_dimensions_set:
-            argument_dimension_names: list[str] = [
+            argument_dimension_names: List[str] = [
                 argument_dimension_name
                 for argument_dimension_name, _ in argument_dimensions_set
             ]
 
-            argument_dimension_dimensions: list[DimensionAnnotation] = [
+            argument_dimension_dimensions: List[DimensionAnnotation] = [
                 argument_dimension_dimension
                 for _, argument_dimension_dimension in argument_dimensions_set
             ]
@@ -127,10 +86,10 @@ def separate_argument_dimension_into_names_and_dimensions(
             arguments_dimensions_names.append(tuple())
             arguments_dimensions_dimensions.append(tuple())
 
-    arguments_dimensions_names: tuple[XarrayDimension] = tuple(
+    arguments_dimensions_names: Tuple[XarrayDimension] = tuple(
         arguments_dimensions_names
     )
-    arguments_dimensions_dimensions: tuple[DimensionAnnotation] = tuple(
+    arguments_dimensions_dimensions: Tuple[DimensionAnnotation] = tuple(
         arguments_dimensions_dimensions
     )
 
@@ -163,9 +122,7 @@ class Dimensionalize:
             )
         )
 
-        self.vectorizable: bool = (
-            False  # ADA: changed default to False for numba version only
-        )
+        self.vectorizable: bool = True
 
     def __call__(self, function: Callable[[Any], Any]):
         @wraps(function)
@@ -176,51 +133,7 @@ class Dimensionalize:
                 kwargs=kwargs,
                 input_core_dims=self._argument_dimension_names,
                 output_core_dims=self._result_dimension_names,
-                # vectorize=self.vectorizable,
-                vectorize=False,
-            )
-
-        return apply_ufunc_wrapper
-
-
-# Define the specific signature for RT_Toon1989 as a constant
-# Input arguments:
-# 5 x (wavelength, pressure) -> (i,j)
-# 2 x (cosine_angle,) -> () (as apply_ufunc(vectorize=False) slices these to scalars)
-# Output argument:
-# 1 x (wavelength,) -> (i)
-RT_TOON1989_SIGNATURE: Final[str] = "(i,j), (i,j), (i,j), (i,j), (i,j), (), () -> (i)"
-
-
-@dataclass
-class DimensionalizeRTToon1989(
-    Dimensionalize
-):  # Inherit from the original Dimensionalize
-    """
-    A bespoke Dimensionalize decorator specifically for RT_Toon1989.
-    It hardcodes the function signature and sets vectorize=False
-    to ensure proper interaction with Numba-jitted code.
-    """
-
-    # We don't need __init__ if we just want to override __post_init__ or __call__
-    # but for clarity, ensure parent's setup is used.
-    def __post_init__(self):
-        # Call the parent's post_init to set up argument_dimension_names etc.
-        super().__post_init__()
-        # Override vectorizable to False, as per our analysis for RT_Toon1989
-        self.vectorizable = False
-
-    def __call__(self, function: Callable[[Any], Any]):
-        @wraps(function)
-        def apply_ufunc_wrapper(*args, **kwargs):
-            return xr.apply_ufunc(
-                function,
-                *args,
-                kwargs=kwargs,
-                input_core_dims=self._argument_dimension_names,
-                output_core_dims=self._result_dimension_names,
-                vectorize=self.vectorizable,  # This will be False
-                signature=RT_TOON1989_SIGNATURE,  # <--- HARDCODED SIGNATURE FOR THIS SPECIFIC FUNCTION
+                vectorize=self.vectorizable,
             )
 
         return apply_ufunc_wrapper
@@ -232,7 +145,66 @@ class DimensionalizeRTToon1989(
 #       and potentially the shapes of the inputs vs. outputs. Not specific shapes, just for example
 #       whether the function preserves the shape of the input.
 
-# Below is some borrowing of xarray-specific functional code from a different project.
+
+@function_decorator
+def rename_and_unitize(new_name: str, units: str, function=DECORATED) -> Callable:
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+        result = function(*args, **kwargs)
+        if isinstance(result, xr.DataArray):
+            result = result.rename(new_name).assign_attrs(units=units)
+        elif isinstance(result, xr.Dataset):
+            result = result.rename({var: new_name for var in result.data_vars})
+            for var in result.data_vars:
+                result[var].attrs["units"] = units
+        return result
+
+    return wrapper
+
+
+XarrayOutputs: TypeAlias = Mapping[str, xr.DataArray | xr.Dataset]
+
+
+class ProducesXarrayOutputs(Protocol):
+    def __call__(self, *args, **kwargs) -> XarrayOutputs: ...
+
+
+def save_xarray_outputs_to_file(
+    function: ProducesXarrayOutputs,
+) -> ProducesXarrayOutputs:
+    @wraps(function)
+    def wrapper(
+        *args,
+        output_directory: Path = Path.cwd(),
+        filename_prefix: str = "output",
+        **kwargs,
+    ):
+        def make_output_filepath(case_name: str) -> str:
+            return str(output_directory / f"{filename_prefix}_{case_name}.nc")
+
+        result: XarrayOutputs = function(*args, **kwargs)
+
+        if isinstance(result, xr.Dataset):
+            result_as_dict = {"output": result}
+        elif isinstance(result, dict):
+            result_as_dict = result
+        elif isinstance(result, tuple):
+            result_as_dict = result._asdict()
+
+        for dataset_name, dataset in result_as_dict.items():
+            output_dataset: xr.Dataset = (
+                dataset
+                if isinstance(dataset, xr.Dataset)
+                else dataset.to_dataset(name=dataset_name)
+            )
+            output_dataset.to_netcdf(make_output_filepath(case_name=dataset_name))
+
+        return result
+
+    return wrapper
+
+
+# Below is some borrowing of xarray-specific functional code from a different project:
 
 
 def get_getter_from_dataset(variable_name: str) -> Callable[[xr.Dataset], xr.DataArray]:
@@ -300,65 +272,3 @@ def map_function_arguments_to_dataset_variables(
     return partial(
         function_using_dataset, function=function, variable_mapping=variable_mapping
     )
-
-
-# def rename_and_unitize(data_array: xr.DataArray, name: str, units: str) -> xr.DataArray:
-#    return data_array.rename(name).assign_attrs(units=units)
-
-
-@function_decorator
-def rename_and_unitize(new_name: str, units: str, function=DECORATED) -> Callable:
-    @wraps(function)
-    def wrapper(*args, **kwargs):
-        result = function(*args, **kwargs)
-        if isinstance(result, xr.DataArray):
-            result = result.rename(new_name).assign_attrs(units=units)
-        elif isinstance(result, xr.Dataset):
-            result = result.rename({var: new_name for var in result.data_vars})
-            for var in result.data_vars:
-                result[var].attrs["units"] = units
-        return result
-
-    return wrapper
-
-
-XarrayOutputs: TypeAlias = Mapping[str, xr.DataArray | xr.Dataset]
-
-
-class ProducesXarrayOutputs(Protocol):
-    def __call__(self, *args, **kwargs) -> XarrayOutputs: ...
-
-
-def save_xarray_outputs_to_file(
-    function: ProducesXarrayOutputs,
-) -> ProducesXarrayOutputs:
-    @wraps(function)
-    def wrapper(
-        *args,
-        output_directory: Path = Path.cwd(),
-        filename_prefix: str = "output",
-        **kwargs,
-    ):
-        def make_output_filepath(case_name: str) -> str:
-            return str(output_directory / f"{filename_prefix}_{case_name}.nc")
-
-        result: XarrayOutputs = function(*args, **kwargs)
-
-        if isinstance(result, xr.Dataset):
-            result_as_dict = {"output": result}
-        elif isinstance(result, dict):
-            result_as_dict = result
-        elif isinstance(result, tuple):
-            result_as_dict = result._asdict()
-
-        for dataset_name, dataset in result_as_dict.items():
-            output_dataset: xr.Dataset = (
-                dataset
-                if isinstance(dataset, xr.Dataset)
-                else dataset.to_dataset(name=dataset_name)
-            )
-            output_dataset.to_netcdf(make_output_filepath(case_name=dataset_name))
-
-        return result
-
-    return wrapper

@@ -2,19 +2,19 @@ import numpy as np
 from numpy.typing import NDArray
 
 from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
-from xarray_serialization import PressureType, WavelengthType
+from xarray_serialization import PressureDimension, WavelengthDimension
 
 
 @rename_and_unitize(new_name="transit_depth", units="dimensionless")
 @Dimensionalize(
     argument_dimensions=(
-        (WavelengthType, PressureType),
-        (PressureType,),
-        (PressureType,),
+        (WavelengthDimension, PressureDimension),
+        (PressureDimension,),
+        (PressureDimension,),
         None,
         None,
     ),
-    result_dimensions=((WavelengthType,),),
+    result_dimensions=((WavelengthDimension,),),
 )
 def calculate_transmission_spectrum(
     cumulative_optical_depth: NDArray[np.float64],

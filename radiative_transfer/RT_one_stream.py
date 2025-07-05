@@ -6,7 +6,11 @@ import xarray as xr
 from numpy.typing import NDArray
 
 from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
-from xarray_serialization import CosineAngleType, PressureType, WavelengthType
+from xarray_serialization import (
+    CosineAngleDimension,
+    PressureDimension,
+    WavelengthDimension,
+)
 
 STREAM_COSINE_ANGLES: Final[NDArray[np.float64]] = np.array(
     [
@@ -76,13 +80,13 @@ class OneStreamRTInputs:
 @rename_and_unitize(new_name="emitted_onestream_flux", units="erg s^-1 cm^-3")
 @Dimensionalize(
     argument_dimensions=(
-        (WavelengthType, PressureType),
-        (WavelengthType, PressureType),
-        (CosineAngleType,),
-        (CosineAngleType,),
-        (CosineAngleType,),
+        (WavelengthDimension, PressureDimension),
+        (WavelengthDimension, PressureDimension),
+        (CosineAngleDimension,),
+        (CosineAngleDimension,),
+        (CosineAngleDimension,),
     ),
-    result_dimensions=((WavelengthType,),),
+    result_dimensions=((WavelengthDimension,),),
 )
 def calculate_spectral_intensity_at_surface(
     thermal_intensity: NDArray[np.float64],

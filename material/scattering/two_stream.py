@@ -5,16 +5,19 @@ from numpy.typing import NDArray
 
 from material.types import TwoStreamScatteringParameters
 from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import PressureType, WavelengthType
+from xarray_serialization import PressureDimension, WavelengthDimension
 
 
 @Dimensionalize(
     argument_dimensions=(
-        (WavelengthType, PressureType),
-        (WavelengthType, PressureType),
-        (WavelengthType, PressureType),
+        (WavelengthDimension, PressureDimension),
+        (WavelengthDimension, PressureDimension),
+        (WavelengthDimension, PressureDimension),
     ),
-    result_dimensions=((WavelengthType, PressureType), (WavelengthType, PressureType)),
+    result_dimensions=(
+        (WavelengthDimension, PressureDimension),
+        (WavelengthDimension, PressureDimension),
+    ),
 )
 def calculate_two_stream_scattering_parameters(
     forward_scattering_coefficients: NDArray[np.float64],

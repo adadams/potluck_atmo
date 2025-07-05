@@ -7,7 +7,7 @@ from constants_and_conversions import (
     GRAVITATIONAL_CONSTANT_IN_CGS,
 )
 from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import PressureType
+from xarray_serialization import PressureDimension
 
 
 def convert_pressure_coordinate_by_level_to_by_layer(
@@ -62,13 +62,13 @@ def altitudes_by_level_to_by_layer(
 
 @Dimensionalize(
     argument_dimensions=(
-        (PressureType,),
-        (PressureType,),
-        (PressureType,),
+        (PressureDimension,),
+        (PressureDimension,),
+        (PressureDimension,),
         None,
         None,
     ),
-    result_dimensions=((PressureType,),),
+    result_dimensions=((PressureDimension,),),
 )
 def calculate_altitude_profile(
     log_pressures_in_cgs: NDArray[np.float64],

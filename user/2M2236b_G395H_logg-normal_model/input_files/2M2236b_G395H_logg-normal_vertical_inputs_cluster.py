@@ -6,7 +6,7 @@ import xarray as xr
 from numpy.typing import NDArray
 
 from constants_and_conversions import EARTH_RADIUS_IN_CM
-from material.mixing_ratios import uniform_log_mixing_ratios
+from material.mixing_ratios import generate_uniform_mixing_ratios
 from temperature.models import piette as TP_model
 from temperature.models_experimental_uniform import piette as retrieval_TP_model
 from user.input_importers import import_model_id
@@ -56,7 +56,7 @@ uniform_log_abundances: dict[str, float] = {
     "nh3": -10.14099491,
 }
 
-mixing_ratios_by_level: dict[str, np.ndarray] = uniform_log_mixing_ratios(
+mixing_ratios_by_level: dict[str, np.ndarray] = generate_uniform_mixing_ratios(
     uniform_log_abundances=uniform_log_abundances,
     number_of_pressure_levels=len(pressures_by_level),
     filler_species="h2",
@@ -102,9 +102,7 @@ temperatures_by_level_as_xarray: xr.DataArray = (
         retrieval_TP_model,
         0.2889458091719745,
         np.array([0.11159102, 0.02182628, 0.12510834, 0.10768672, 0.01539343]),
-        np.array(
-            [0.02514635, 0.01982915, 0.06249186, 0.32445998]
-        ),
+        np.array([0.02514635, 0.01982915, 0.06249186, 0.32445998]),
         log_pressures_by_level_as_xarray,
         input_core_dims=[[], ["downward"], ["upward"], ["pressure"]],
         output_core_dims=[["pressure"]],
@@ -195,10 +193,12 @@ def build_uniform_model_inputs(
     # temperatures_by_level: NDArray[np.float64] = temperatures_by_level,
     filler_species: str = "h2",
 ) -> UserVerticalModelInputs:
-    mixing_ratios_by_level: dict[str, NDArray[np.float64]] = uniform_log_mixing_ratios(
-        uniform_log_abundances=uniform_log_abundances,
-        number_of_pressure_levels=len(pressures_by_level),
-        filler_species=filler_species,
+    mixing_ratios_by_level: dict[str, NDArray[np.float64]] = (
+        generate_uniform_mixing_ratios(
+            uniform_log_abundances=uniform_log_abundances,
+            number_of_pressure_levels=len(pressures_by_level),
+            filler_species=filler_species,
+        )
     )
 
     planet_radius_in_cm_as_xarray: xr.DataArray = xr.DataArray(
