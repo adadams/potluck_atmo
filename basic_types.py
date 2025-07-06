@@ -6,14 +6,17 @@ import numpy as np
 Shape = TypeVar("Shape", bound=Tuple[int, ...])
 DType = TypeVar("DType", bound=np.generic)
 
-NormalizedValue = Annotated[float, msgspec.Meta(ge=0, le=1)]
+NormalizedValue: TypeAlias = Annotated[float, msgspec.Meta(ge=0, le=1)]
+PositiveValue: TypeAlias = Annotated[float, msgspec.Meta(gt=0)]
+NonnegativeValue: TypeAlias = Annotated[float, msgspec.Meta(ge=0)]
+NonpositiveValue: TypeAlias = Annotated[float, msgspec.Meta(le=0)]
 
-AltitudeValue: TypeAlias = Annotated[float, msgspec.Meta(ge=0)]
-TemperatureValue: TypeAlias = Annotated[float, msgspec.Meta(gt=0)]
-PressureValue: TypeAlias = Annotated[float, msgspec.Meta(ge=0)]
+AltitudeValue: TypeAlias = NonnegativeValue
+TemperatureValue: TypeAlias = PositiveValue
+PressureValue: TypeAlias = NonnegativeValue
 LogPressureValue: TypeAlias = float
-MixingRatioValue: TypeAlias = Annotated[float, msgspec.Meta(ge=0, le=1)]
-LogMixingRatioValue: TypeAlias = Annotated[float, msgspec.Meta(le=0)]
+MixingRatioValue: TypeAlias = NormalizedValue
+LogMixingRatioValue: TypeAlias = NonpositiveValue
 
 BaseUnits: TypeAlias = Literal["[mass]", "[time]", "[length]", "[temperature]"]
 BaseUnitType: TypeAlias = Annotated[str, BaseUnits]

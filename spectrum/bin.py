@@ -4,7 +4,6 @@ from typing import Optional
 
 import numpy as np
 import xarray as xr
-from numpy.typing import NDArray
 from spectres import spectres
 
 from spectrum.convolve import convolve_with_constant_FWHM_using_FFT
@@ -22,12 +21,12 @@ resample_by_spectres: Callable[
 
 
 def convolve_and_bin_with_constant_FWHM(
-    new_wavelengths: NDArray[np.float64],
-    model_wavelengths: NDArray[np.float64],
-    model_spectral_quantity: NDArray[np.float64],
+    new_wavelengths: np.ndarray[np.float64],
+    model_wavelengths: np.ndarray[np.float64],
+    model_spectral_quantity: np.ndarray[np.float64],
     fwhm: float,
 ):
-    convolved_spectrum: NDArray[np.float64] = convolve_with_constant_FWHM_using_FFT(
+    convolved_spectrum: np.ndarray[np.float64] = convolve_with_constant_FWHM_using_FFT(
         model_wavelengths, model_spectral_quantity, fwhm
     )
 

@@ -143,9 +143,9 @@ def build_uniform_model_inputs(
     proportions_up: np.ndarray,  # shape = (4,), all [0, 1]
     planet_radius_in_cm: float = planet_radius_in_cm,
     planet_gravity_in_cgs: float = planet_gravity_in_cgs,
-    log_pressures_by_level: NDArray[np.float64] = log_pressures_by_level,
-    pressures_by_level: NDArray[np.float64] = pressures_by_level,
-    # temperatures_by_level: NDArray[np.float64] = temperatures_by_level,
+    log_pressures_by_level: np.ndarray[np.float64] = log_pressures_by_level,
+    pressures_by_level: np.ndarray[np.float64] = pressures_by_level,
+    # temperatures_by_level: np.ndarray[np.float64] = temperatures_by_level,
     filler_species: str = "h2only",
 )
 """

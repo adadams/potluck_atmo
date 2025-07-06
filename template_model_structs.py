@@ -1,3 +1,5 @@
+import inspect
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from typing import Any, Final, Optional, TypeAlias
@@ -6,7 +8,6 @@ import msgspec
 import numpy as np
 import xarray as xr
 from jax import numpy as jnp
-from numpy.typing import ArrayLike
 from pint import UnitRegistry
 
 from basic_types import PressureDimension
@@ -40,18 +41,21 @@ class FundamentalParameterInputs(msgspec.Struct):
     planet_gravity: float
     radius_units: str = "cm"
     gravity_units: str = "cm/s^2"
-    additional_attributes: Optional[AttrsType]
+    additional_attributes: Optional[AttrsType] = None
 
 
 def build_default_fundamental_parameters(
     fundamental_parameter_inputs: FundamentalParameterInputs,
 ) -> FundamentalParameters:
-    planet_radius_in_cm = fundamental_parameter_inputs.planet_radius * ureg(
-        fundamental_parameter_inputs.radius_units
-    ).to("cm")
-    planet_gravity_in_cgs = fundamental_parameter_inputs.planet_gravity * ureg(
-        fundamental_parameter_inputs.gravity_units
-    ).to("cm/s^2")
+    planet_radius_in_cm = (
+        fundamental_parameter_inputs.planet_radius
+        * ureg(fundamental_parameter_inputs.radius_units).to("cm").magnitude
+    )
+    planet_gravity_in_cgs = (
+        fundamental_parameter_inputs.planet_gravity
+        * ureg(fundamental_parameter_inputs.gravity_units).to("cm/s^2").magnitude
+    )
+
     additional_attributes: dict[str, Any] = (
         fundamental_parameter_inputs.additional_attributes
         if fundamental_parameter_inputs.additional_attributes is not None
@@ -71,8 +75,8 @@ def build_default_fundamental_parameters(
 
     return xr.Dataset(
         data_vars={
-            "planet_radius_in_cm": planet_radius_in_cm_as_xarray,
-            "planet_gravity_in_cgs": planet_gravity_in_cgs_as_xarray,
+            "planet_radius": planet_radius_in_cm_as_xarray,
+            "planet_gravity": planet_gravity_in_cgs_as_xarray,
         },
         coords={},
         attrs=additional_attributes,
@@ -80,18 +84,29 @@ def build_default_fundamental_parameters(
 
 
 class PressureProfileInputs(msgspec.Struct):
-    log_pressures_by_level: ArrayLike
+    shallowest_log10_pressure: float
+    deepest_log10_pressure: float
+    number_of_levels: int
     units: str = "bar"
-    additional_attributes: Optional[dict] = None
+    additional_attributes: Optional[AttrsType] = None
 
 
 def build_pressure_profile_from_log_pressures(
     pressure_profile_inputs: PressureProfileInputs,
 ) -> PressureProfile:
-    pressures_by_level: np.ndarray = np.power(
-        10, pressure_profile_inputs.log_pressures_by_level
-    ) * ureg(pressure_profile_inputs.units).to("barye")
-    log_pressures_by_level: np.ndarray = np.log10(pressures_by_level)
+    log_pressures_by_level: np.ndarray = np.linspace(
+        pressure_profile_inputs.shallowest_log10_pressure,
+        pressure_profile_inputs.deepest_log10_pressure,
+        pressure_profile_inputs.number_of_levels,
+    )
+
+    pressures_by_level: np.ndarray = 10**log_pressures_by_level
+
+    pressures_by_level_in_cgs: np.ndarray = (
+        pressures_by_level * ureg(pressure_profile_inputs.units).to("bar").magnitude
+    )
+
+    log_pressures_by_level_in_cgs: np.ndarray = np.log10(pressures_by_level_in_cgs)
 
     additional_attributes: dict[str, Any] = (
         pressure_profile_inputs.additional_attributes
@@ -101,14 +116,14 @@ def build_pressure_profile_from_log_pressures(
 
     pressures_by_level_as_xarray: xr.DataArray = xr.DataArray(
         name="pressure",
-        data=jnp.array(pressures_by_level),
+        data=jnp.array(pressures_by_level_in_cgs),
         dims=("pressure",),
         attrs={"units": "barye"},
     )
 
     log_pressures_by_level_as_xarray: xr.DataArray = xr.DataArray(
         name="log10_pressure",
-        data=jnp.array(log_pressures_by_level),
+        data=jnp.array(log_pressures_by_level_in_cgs),
         dims=("pressure",),
         coords={"pressure": pressures_by_level_as_xarray},
         attrs={"units": "log10(barye)"},
@@ -116,7 +131,6 @@ def build_pressure_profile_from_log_pressures(
 
     return xr.Dataset(
         data_vars={
-            "pressure": pressures_by_level_as_xarray,
             "log10_pressure": log_pressures_by_level_as_xarray,
         },
         coords={"pressure": pressures_by_level_as_xarray},
@@ -195,3 +209,45 @@ def build_temperature_profile(
     )
 
     return temperatures_by_level_as_xarray
+
+
+class TestModelInputs(msgspec.Struct):
+    fundamental_parameters: FundamentalParameterInputs
+    pressure_profile: PressureProfileInputs
+    temperature_model: TemperatureModelInputs
+    gas_chemistry: UniformGasChemistryInputs
+
+
+if __name__ == "__main__":
+    test_model_inputs_filepath: Path = current_directory / "test_model_inputs.toml"
+
+    with open(test_model_inputs_filepath, "rb") as file:
+        test_model_inputs: FundamentalParameterInputs = msgspec.toml.decode(
+            file.read()  # , type=FundamentalParameterInputs
+        )
+
+    for (
+        model_component_function_name,
+        model_component_parameter_set,
+    ) in test_model_inputs.items():
+        model_component_function: Callable = getattr(
+            __import__(__name__), model_component_function_name
+        )
+
+        # get the type signature of the only argument of this function
+        model_component_function_signature = inspect.signature(
+            model_component_function
+        ).parameters
+
+        model_component_function_arguments_class: type = list(
+            model_component_function_signature.values()
+        )[0].annotation
+
+        model_component_function_arguments = model_component_function_arguments_class(
+            **model_component_parameter_set
+        )
+        print(f"{model_component_function_arguments=}")
+
+        test_output = model_component_function(model_component_function_arguments)
+
+        print(f"{test_output=}")

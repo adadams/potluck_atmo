@@ -1,21 +1,13 @@
-from collections.abc import Callable
-from typing import TypeAlias
-
 import numpy as np
-from numba import jit
-from numpy.typing import NDArray
-
-UfuncLike: TypeAlias = (
-    Callable[[float], float] | Callable[[NDArray[np.float64]], NDArray[np.float64]]
-)
+from numba import njit
 
 
-@jit(nopython=True)
+@njit
 def convolve_with_constant_FWHM(
-    model_wavelengths: NDArray[np.float64],
-    model_spectral_quantity: NDArray[np.float64],
+    model_wavelengths: np.ndarray[np.float64],
+    model_spectral_quantity: np.ndarray[np.float64],
     fwhm: float,
-) -> NDArray[np.float64]:
+) -> np.ndarray[np.float64]:
     sigma: np.ndarray = fwhm / 2.355
 
     Fratio_int: np.ndarray = np.zeros_like(model_wavelengths)

@@ -3,7 +3,6 @@ from typing import Final
 
 import numpy as np
 import xarray as xr
-from numpy.typing import NDArray
 
 from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
 from xarray_serialization import (
@@ -12,7 +11,7 @@ from xarray_serialization import (
     WavelengthDimension,
 )
 
-STREAM_COSINE_ANGLES: Final[NDArray[np.float64]] = np.array(
+STREAM_COSINE_ANGLES: Final[np.ndarray[np.float64]] = np.array(
     [
         0.0446339553,
         0.1443662570,
@@ -25,9 +24,9 @@ STREAM_COSINE_ANGLES: Final[NDArray[np.float64]] = np.array(
     ]
 )
 
-STREAM_SINE_ANGLES: Final[NDArray[np.float64]] = np.sqrt(1 - STREAM_COSINE_ANGLES**2)
+STREAM_SINE_ANGLES: Final[np.ndarray[np.float64]] = np.sqrt(1 - STREAM_COSINE_ANGLES**2)
 
-STREAM_WEIGHTS: Final[NDArray[np.float64]] = np.array(
+STREAM_WEIGHTS: Final[np.ndarray[np.float64]] = np.array(
     [
         0.0032951914,
         0.0178429027,
@@ -89,27 +88,27 @@ class OneStreamRTInputs:
     result_dimensions=((WavelengthDimension,),),
 )
 def calculate_spectral_intensity_at_surface(
-    thermal_intensity: NDArray[np.float64],
-    cumulative_optical_depth_by_layer: NDArray[np.float64],
-    stream_cosine_angles: NDArray[np.float64],
-    stream_sine_angles: NDArray[np.float64],
-    stream_weights: NDArray[np.float64],
-) -> NDArray[np.float64]:
-    stream_cosine_angles: NDArray[np.float64] = np.expand_dims(
+    thermal_intensity: np.ndarray[np.float64],
+    cumulative_optical_depth_by_layer: np.ndarray[np.float64],
+    stream_cosine_angles: np.ndarray[np.float64],
+    stream_sine_angles: np.ndarray[np.float64],
+    stream_weights: np.ndarray[np.float64],
+) -> np.ndarray[np.float64]:
+    stream_cosine_angles: np.ndarray[np.float64] = np.expand_dims(
         stream_cosine_angles,
         axis=tuple(range(1, cumulative_optical_depth_by_layer.ndim + 1)),
     )
 
-    stream_sine_angles: NDArray[np.float64] = np.expand_dims(
+    stream_sine_angles: np.ndarray[np.float64] = np.expand_dims(
         stream_sine_angles,
         axis=tuple(range(1, cumulative_optical_depth_by_layer.ndim + 1)),
     )
 
-    attenutation_factors_by_layer: NDArray[np.float64] = np.exp(
+    attenutation_factors_by_layer: np.ndarray[np.float64] = np.exp(
         -cumulative_optical_depth_by_layer / stream_cosine_angles
     )
 
-    previous_attenuation_factors_by_layer: NDArray[np.float64] = np.concatenate(
+    previous_attenuation_factors_by_layer: np.ndarray[np.float64] = np.concatenate(
         (
             np.ones([*attenutation_factors_by_layer.shape[:-1], 1]),  # exp(0) = 1
             attenutation_factors_by_layer[..., :-1],
@@ -117,20 +116,20 @@ def calculate_spectral_intensity_at_surface(
         axis=-1,
     )
 
-    spectral_intensity_by_layer: NDArray[np.float64] = thermal_intensity * (
+    spectral_intensity_by_layer: np.ndarray[np.float64] = thermal_intensity * (
         previous_attenuation_factors_by_layer - attenutation_factors_by_layer
     )
 
-    spectral_intensity_at_surface_by_angle: NDArray[np.float64] = np.sum(
+    spectral_intensity_at_surface_by_angle: np.ndarray[np.float64] = np.sum(
         spectral_intensity_by_layer * stream_sine_angles, axis=-1
     )
 
-    stream_weights: NDArray[np.float64] = np.expand_dims(
+    stream_weights: np.ndarray[np.float64] = np.expand_dims(
         stream_weights,
         axis=tuple(range(1, spectral_intensity_at_surface_by_angle.ndim)),
     )
 
-    spectral_intensity_at_surface: NDArray[np.float64] = np.pi**2 * np.sum(
+    spectral_intensity_at_surface: np.ndarray[np.float64] = np.pi**2 * np.sum(
         spectral_intensity_at_surface_by_angle * stream_weights, axis=0
     )
 

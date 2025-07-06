@@ -1,6 +1,5 @@
 import numpy as np
 import xarray as xr
-from numpy.typing import NDArray
 
 from constants_and_conversions import (
     BOLTZMANN_CONSTANT_IN_CGS,
@@ -71,22 +70,22 @@ def altitudes_by_level_to_by_layer(
     result_dimensions=((PressureDimension,),),
 )
 def calculate_altitude_profile(
-    log_pressures_in_cgs: NDArray[np.float64],
-    temperatures_in_K: NDArray[np.float64],
-    mean_molecular_weights_in_g: NDArray[np.float64],
+    log_pressures_in_cgs: np.ndarray[np.float64],
+    temperatures_in_K: np.ndarray[np.float64],
+    mean_molecular_weights_in_g: np.ndarray[np.float64],
     planet_radius_in_cm: float,
     planet_mass_in_g: float,
-) -> NDArray[np.float64]:
-    log_pressures_in_cgs: NDArray[np.float64] = log_pressures_in_cgs + 6
+) -> np.ndarray[np.float64]:
+    log_pressures_in_cgs: np.ndarray[np.float64] = log_pressures_in_cgs + 6
 
-    log10_pressure_differences: NDArray[np.float64] = (
+    log10_pressure_differences: np.ndarray[np.float64] = (
         log_pressures_in_cgs[1:] - log_pressures_in_cgs[:-1]
     )
-    log_pressure_differences: NDArray[np.float64] = (
+    log_pressure_differences: np.ndarray[np.float64] = (
         np.log(10) * log10_pressure_differences
     )
 
-    altitudes: NDArray[np.float64] = np.empty_like(log_pressures_in_cgs)
+    altitudes: np.ndarray[np.float64] = np.empty_like(log_pressures_in_cgs)
     altitudes[-1] = 0
 
     for i, (
@@ -120,6 +119,6 @@ def calculate_altitude_profile(
 
 
 def impose_upper_limit_on_altitude(
-    altitudes: NDArray[np.float64], upper_altitude_limit: float
+    altitudes: np.ndarray[np.float64], upper_altitude_limit: float
 ):
     return np.clip(altitudes, a_max=upper_altitude_limit)

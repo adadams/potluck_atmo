@@ -2,7 +2,7 @@
 
 # planet_gravity_in_cgs: float = 756.4  # cm/s^2
 
-# log_pressures_by_level: NDArray[np.float64] = np.log10(pressures_by_level)
+# log_pressures_by_level: np.ndarray[np.float64] = np.log10(pressures_by_level)
 
 # uniform_log_abundances: dict[str, float] = {"h2o": -3.171, "ch4": -3.318}
 

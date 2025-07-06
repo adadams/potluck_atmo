@@ -1,0 +1,12 @@
+[build_default_fundamental_parameters]
+planet_radius = 7.776098627
+planet_gravity = 13613.2622
+radius_units = "Earth_radius"
+gravity_units = "cm/s^2"
+
+[build_pressure_profile_from_log_pressures]
+shallowest_log10_pressure = -4.0
+deepest_log10_pressure = 2.5
+number_of_levels = 71
+units = "bar"
+

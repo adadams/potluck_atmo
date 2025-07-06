@@ -3,17 +3,16 @@ from functools import partial, wraps
 from typing import Any
 
 import numpy as np
-from numpy.typing import NDArray
 
 from xarray_serialization import UnitsAttrs, XarrayDimension, XarrayVariable
 
 type CoordinateBuilder = Callable[
-    [NDArray[np.float64], XarrayDimension, UnitsAttrs, type], XarrayVariable
+    [np.ndarray[np.float64], XarrayDimension, UnitsAttrs, type], XarrayVariable
 ]
 
 
 def build_coordinate(
-    data: NDArray[np.float64],
+    data: np.ndarray[np.float64],
     dims: XarrayDimension,
     attrs: UnitsAttrs,
     coordinate_class: type = XarrayVariable,
@@ -36,13 +35,13 @@ def return_coordinate(dims: XarrayDimension, units: str) -> Callable:
     attrs: UnitsAttrs = UnitsAttrs(units=units)
 
     def build_function_with_result_in_coordinate_form(
-        function: Callable[[Any], NDArray[np.float64]],
+        function: Callable[[Any], np.ndarray[np.float64]],
     ):
         @wraps(function)
         def function_with_result_in_coordinate_form(
             *args: Any, **kwargs: Any
         ) -> WavelengthCoordinate:
-            function_result: NDArray[np.float64] = function(*args, **kwargs)
+            function_result: np.ndarray[np.float64] = function(*args, **kwargs)
 
             return build_wavelength_coordinate(
                 data=function_result, dims=dims, attrs=attrs
@@ -63,7 +62,7 @@ def build_wavelength_array(
     minimum_wavelength: float,
     maximum_wavelength: float,
     effective_resolution: float,
-) -> NDArray[np.float64]:
+) -> np.ndarray[np.float64]:
     number_of_spectral_elements: int = int(
         effective_resolution * np.log(maximum_wavelength / minimum_wavelength) + 1
     )
@@ -81,7 +80,7 @@ def get_number_of_wavelengths(
 
 def get_wavelengths_from_number_of_elements_and_resolution(
     starting_wavelength: float, number_of_elements: int, spectral_resolution: float
-) -> NDArray[np.float64]:
+) -> np.ndarray[np.float64]:
     return starting_wavelength * np.exp(
         np.arange(number_of_elements) / spectral_resolution
     )
@@ -92,7 +91,7 @@ def get_wavelengths_from_wavelength_bins(wavelength_bin_starts, wavelength_bin_e
 
 
 if __name__ == "__main__":
-    test_wavelength_coordinate: NDArray[np.float64] = build_wavelength_array(
+    test_wavelength_coordinate: np.ndarray[np.float64] = build_wavelength_array(
         minimum_wavelength=0.8,
         maximum_wavelength=5.3,
         effective_resolution=200,

@@ -3,7 +3,7 @@ from time import time
 import numpy as np
 
 from basic_types import TemperatureValue
-from temperature.models_experimental_uniform import (
+from temperature.models import (
     PietteTemperatureModelInputs,
     generate_piette_model,
 )

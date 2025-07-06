@@ -1,5 +1,4 @@
 import numpy as np
-from numpy.typing import NDArray
 
 from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
 from xarray_serialization import (
@@ -18,9 +17,9 @@ from xarray_serialization import (
     result_dimensions=((WavelengthDimension, PressureDimension, SpeciesDimension),),
 )
 def crosssections_to_attenuation_coefficients(
-    crosssections: NDArray[np.float64],
-    number_density: NDArray[np.float64],
-) -> NDArray[np.float64]:
+    crosssections: np.ndarray[np.float64],
+    number_density: np.ndarray[np.float64],
+) -> np.ndarray[np.float64]:
     return crosssections * number_density
 
 
@@ -33,8 +32,9 @@ def crosssections_to_attenuation_coefficients(
     result_dimensions=((WavelengthDimension, PressureDimension),),
 )
 def attenuation_coefficients_to_optical_depths(
-    attenuation_coefficients: NDArray[np.float64], path_length: NDArray[np.float64]
-) -> NDArray[np.float64]:
+    attenuation_coefficients: np.ndarray[np.float64],
+    path_length: np.ndarray[np.float64],
+) -> np.ndarray[np.float64]:
     return attenuation_coefficients * path_length
 
 
@@ -48,8 +48,8 @@ def attenuation_coefficients_to_optical_depths(
     result_dimensions=((WavelengthDimension, SpeciesDimension, PressureDimension),),
 )
 def crosssections_to_optical_depths(
-    crosssections: NDArray[np.float64],
-    number_density: NDArray[np.float64],
-    path_length: NDArray[np.float64],
-) -> NDArray[np.float64]:
+    crosssections: np.ndarray[np.float64],
+    number_density: np.ndarray[np.float64],
+    path_length: np.ndarray[np.float64],
+) -> np.ndarray[np.float64]:
     return crosssections * number_density * path_length

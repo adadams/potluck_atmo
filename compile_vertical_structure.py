@@ -4,7 +4,6 @@ from typing import Any, NamedTuple
 import msgspec
 import numpy as np
 import xarray as xr
-from numpy.typing import NDArray
 
 from constants_and_conversions import (
     AMU_IN_GRAMS,
@@ -52,7 +51,7 @@ def compile_vertical_structure_for_forward_model(
         attrs={"units": "kelvin"},
     )
 
-    number_densities: dict[str, NDArray[np.float64]] = {
+    number_densities: dict[str, np.ndarray[np.float64]] = {
         species: xr.DataArray(data=number_density_array, coords=pressure_coordinates)
         for species, number_density_array in mixing_ratios_to_number_densities(
             mixing_ratios_by_level=user_vertical_inputs.chemistry,
@@ -103,14 +102,14 @@ def compile_comprehensive_vertical_structure(
         * AMU_IN_GRAMS
     )
 
-    altitudes_in_cm: NDArray[np.float64] = calculate_altitude_profile(
+    altitudes_in_cm: np.ndarray[np.float64] = calculate_altitude_profile(
         log_pressures_in_cgs=user_vertical_inputs.log_pressures_by_level,
         temperatures_in_K=user_vertical_inputs.temperatures_by_level,
         mean_molecular_weights_in_g=mean_molecular_weights_in_g,
         planet_radius_in_cm=user_vertical_inputs.planet_radius_in_cm,
         planet_mass_in_g=planet_mass_in_g,
     )
-    altitudes_in_planet_radii: NDArray[np.float64] = (
+    altitudes_in_planet_radii: np.ndarray[np.float64] = (
         altitudes_in_cm / user_vertical_inputs.planet_radius_in_cm
     )
 
@@ -148,7 +147,7 @@ def compile_comprehensive_vertical_structure(
 
     molecular_mixing_ratios: dict[str, xr.DataArray] = {
         species: xr.DataArray(
-            np.ones_like(user_vertical_inputs.pressures_by_level) * abundance,
+            np.full_like(user_vertical_inputs.pressures_by_level, abundance),
             coords=shared_coordinates,
             dims=["pressure"],
             name=f"{species} mixing ratio",

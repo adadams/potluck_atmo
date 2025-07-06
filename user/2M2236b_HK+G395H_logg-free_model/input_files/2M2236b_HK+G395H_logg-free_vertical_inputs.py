@@ -3,7 +3,6 @@ from pathlib import Path
 
 import numpy as np
 import xarray as xr
-from numpy.typing import NDArray
 
 from constants_and_conversions import EARTH_RADIUS_IN_CM
 from material.mixing_ratios import generate_uniform_mixing_ratios
@@ -26,10 +25,10 @@ planet_radius_in_cm: float = 9.681538217 * EARTH_RADIUS_IN_CM
 planet_logg_in_cgs: float = 3.010205211
 planet_gravity_in_cgs: float = 10**planet_logg_in_cgs  # cm/s^2
 
-log_pressures_by_level: NDArray[np.float64] = np.linspace(-4.0, 2.5, num=71)
-pressures_by_level: NDArray[np.float64] = 10**log_pressures_by_level
+log_pressures_by_level: np.ndarray[np.float64] = np.linspace(-4.0, 2.5, num=71)
+pressures_by_level: np.ndarray[np.float64] = 10**log_pressures_by_level
 
-temperatures_by_level: NDArray[np.float64] = TP_model(
+temperatures_by_level: np.ndarray[np.float64] = TP_model(
     T_m4=910.7211501,
     T_m3=911.8409864,
     T_m2=914.9540023,

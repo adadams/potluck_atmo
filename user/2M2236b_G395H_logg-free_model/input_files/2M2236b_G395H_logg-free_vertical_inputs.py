@@ -3,12 +3,11 @@ from pathlib import Path
 
 import numpy as np
 import xarray as xr
-from numpy.typing import NDArray
 
 from constants_and_conversions import EARTH_RADIUS_IN_CM
 from material.mixing_ratios import generate_uniform_mixing_ratios
 from temperature.models import piette as TP_model
-from temperature.models_experimental_uniform import piette as retrieval_TP_model
+from temperature.models import piette as retrieval_TP_model
 from user.input_importers import import_model_id
 from user.input_structs import UserVerticalModelInputs
 
@@ -27,10 +26,10 @@ planet_radius_in_cm: float = 8.184222081 * EARTH_RADIUS_IN_CM
 planet_logg_in_cgs: float = 5.449444667
 planet_gravity_in_cgs: float = 10**planet_logg_in_cgs  # cm/s^2
 
-log_pressures_by_level: NDArray[np.float64] = np.linspace(-4.0, 2.5, num=71)
-pressures_by_level: NDArray[np.float64] = 10**log_pressures_by_level
+log_pressures_by_level: np.ndarray[np.float64] = np.linspace(-4.0, 2.5, num=71)
+pressures_by_level: np.ndarray[np.float64] = 10**log_pressures_by_level
 
-temperatures_by_level: NDArray[np.float64] = TP_model(
+temperatures_by_level: np.ndarray[np.float64] = TP_model(
     T_m4=524.9407393,
     T_m3=682.5744882,
     T_m2=815.3428307,
@@ -205,12 +204,12 @@ def build_uniform_model_inputs(
     proportions_up: np.ndarray,  # shape = (4,), all [0, 1]
     planet_radius_in_cm: float = planet_radius_in_cm,
     planet_gravity_in_cgs: float = planet_gravity_in_cgs,
-    log_pressures_by_level: NDArray[np.float64] = log_pressures_by_level,
-    pressures_by_level: NDArray[np.float64] = pressures_by_level,
-    # temperatures_by_level: NDArray[np.float64] = temperatures_by_level,
+    log_pressures_by_level: np.ndarray[np.float64] = log_pressures_by_level,
+    pressures_by_level: np.ndarray[np.float64] = pressures_by_level,
+    # temperatures_by_level: np.ndarray[np.float64] = temperatures_by_level,
     filler_species: str = "h2only",
 ) -> UserVerticalModelInputs:
-    mixing_ratios_by_level: dict[str, NDArray[np.float64]] = (
+    mixing_ratios_by_level: dict[str, np.ndarray[np.float64]] = (
         generate_uniform_mixing_ratios(
             uniform_log_abundances=uniform_log_abundances,
             number_of_pressure_levels=len(pressures_by_level),

@@ -3,7 +3,7 @@ from datetime import datetime
 import xarray as xr
 
 from material.mixing_ratios import MixingRatios, generate_uniform_mixing_ratios
-from temperature.models_experimental_uniform import generate_piette_model
+from temperature.models import generate_piette_model
 from temperature.protocols import TemperatureModelInputs
 from template_model_structs import (
     FundamentalParameterInputs,

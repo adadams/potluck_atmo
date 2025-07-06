@@ -9,16 +9,23 @@ XarrayDimension: TypeAlias = Tuple[str, ...]
 XarrayData: TypeAlias = List[float]
 
 SerializablePrimitiveType = Union[str, int, float, bool, None]
-SerializableContainerType = Union[
+SerializableType = Union[
     SerializablePrimitiveType,
     Dict[str, SerializablePrimitiveType],
     List[SerializablePrimitiveType],
 ]
-SerializableType = Union[
-    SerializableContainerType,
-    Dict[str, SerializableContainerType],
-    List[SerializableContainerType],
-]
+
+# SerializableContainerType = Union[
+#    SerializablePrimitiveType,
+#    Dict[str, SerializablePrimitiveType],
+#    List[SerializablePrimitiveType],
+# ]
+
+# SerializableType = Union[
+#    SerializableContainerType,
+#    Dict[str, SerializableContainerType],
+#    List[SerializableContainerType],
+# ]
 
 AttrsType: TypeAlias = Dict[str, SerializableType]
 

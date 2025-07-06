@@ -4,7 +4,6 @@ from functools import reduce
 import jax.numpy as jnp
 import numpy as np
 from jax import Array
-from numpy.typing import NDArray
 
 
 def compose(*functions: Sequence[Callable]) -> Callable:
@@ -12,8 +11,8 @@ def compose(*functions: Sequence[Callable]) -> Callable:
 
 
 def interleave(
-    first_terms: NDArray[np.float64],
-    second_terms: NDArray[np.float64],
+    first_terms: np.ndarray[np.float64],
+    second_terms: np.ndarray[np.float64],
     interleaved_axis: int = -1,
 ) -> np.ndarray:
     interleaved_dimension_size = (

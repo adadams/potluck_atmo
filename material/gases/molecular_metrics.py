@@ -2,7 +2,6 @@ from typing import Final
 
 import msgspec
 import numpy as np
-from numpy.typing import NDArray
 
 from constants_and_conversions import BOLTZMANN_CONSTANT_IN_CGS
 
@@ -57,14 +56,14 @@ OXYGEN_ATOMS_PER_MOLECULE: Final[dict[str, int]] = {
 
 
 class MoleculeMetrics(msgspec.Struct):
-    CtoO_ratio: float | NDArray[np.float64]
-    mean_molecular_weight: float | NDArray[np.float64]
-    metallicity: float | NDArray[np.float64]
+    CtoO_ratio: float | np.ndarray[np.float64]
+    mean_molecular_weight: float | np.ndarray[np.float64]
+    metallicity: float | np.ndarray[np.float64]
 
 
 def calculate_CtoO_ratio(
-    mixing_ratios: dict[str, float | NDArray[np.float64]],
-) -> float | NDArray[np.float64]:
+    mixing_ratios: dict[str, float | np.ndarray[np.float64]],
+) -> float | np.ndarray[np.float64]:
     carbon = 0.0
     oxygen = 0.0
 
@@ -82,9 +81,9 @@ def calculate_CtoO_ratio(
 
 
 def calculate_metallicity(
-    mixing_ratios: dict[str, float | NDArray[np.float64]],
+    mixing_ratios: dict[str, float | np.ndarray[np.float64]],
     reference_metal_fraction: float = SOLAR_METAL_FRACTION,
-) -> float | NDArray[np.float64]:
+) -> float | np.ndarray[np.float64]:
     metal_compounds = METAL_MOLECULAR_WEIGHTS.keys()
 
     metals = 0.0
@@ -97,18 +96,18 @@ def calculate_metallicity(
 
 
 def curate_molecular_weights(
-    mixing_ratios: dict[str, float | NDArray[np.float64]],
+    mixing_ratios: dict[str, float | np.ndarray[np.float64]],
     molecular_weights: dict[str, float] = MOLECULAR_WEIGHTS,
-) -> NDArray[np.float64]:
+) -> np.ndarray[np.float64]:
     # TODO: this is essentially just picking the compounds by key.
 
     return {compound: molecular_weights[compound] for compound in mixing_ratios}
 
 
 def calculate_weighted_molecular_weights(
-    mixing_ratios: dict[str, float | NDArray[np.float64]],
+    mixing_ratios: dict[str, float | np.ndarray[np.float64]],
     molecular_weights: dict[str, float] = MOLECULAR_WEIGHTS,
-) -> NDArray[np.float64]:
+) -> np.ndarray[np.float64]:
     return {
         compound: molecular_weights[compound] * mixing_ratios[compound]
         for compound in mixing_ratios
@@ -116,9 +115,9 @@ def calculate_weighted_molecular_weights(
 
 
 def calculate_mean_molecular_weight(
-    mixing_ratios: dict[str, float | NDArray[np.float64]],
-) -> float | NDArray[np.float64]:
-    weighted_molecular_weights: NDArray[np.float64] = (
+    mixing_ratios: dict[str, float | np.ndarray[np.float64]],
+) -> float | np.ndarray[np.float64]:
+    weighted_molecular_weights: np.ndarray[np.float64] = (
         calculate_weighted_molecular_weights(mixing_ratios)
     )
 
@@ -126,23 +125,23 @@ def calculate_mean_molecular_weight(
 
 
 def calculate_molecular_metrics(
-    mixing_ratios: dict[str, float | NDArray[np.float64]],
+    mixing_ratios: dict[str, float | np.ndarray[np.float64]],
 ) -> MoleculeMetrics:
-    ctoo_ratio: float | NDArray[np.float64] = calculate_CtoO_ratio(mixing_ratios)
+    ctoo_ratio: float | np.ndarray[np.float64] = calculate_CtoO_ratio(mixing_ratios)
 
-    mean_molecular_weight: float | NDArray[np.float64] = (
+    mean_molecular_weight: float | np.ndarray[np.float64] = (
         calculate_mean_molecular_weight(mixing_ratios)
     )
 
-    metallicity: float | NDArray[np.float64] = calculate_metallicity(mixing_ratios)
+    metallicity: float | np.ndarray[np.float64] = calculate_metallicity(mixing_ratios)
 
     return MoleculeMetrics(ctoo_ratio, mean_molecular_weight, metallicity)
 
 
 def mixing_ratios_to_partial_pressures_by_species(
-    mixing_ratio_by_level: NDArray[np.float64],
-    molecular_weight_by_level: NDArray[np.float64],
-    mean_molecular_weight_by_level: NDArray[np.float64],
+    mixing_ratio_by_level: np.ndarray[np.float64],
+    molecular_weight_by_level: np.ndarray[np.float64],
+    mean_molecular_weight_by_level: np.ndarray[np.float64],
 ):
     return (
         mixing_ratio_by_level
@@ -152,11 +151,11 @@ def mixing_ratios_to_partial_pressures_by_species(
 
 
 def mixing_ratios_to_number_densities_by_species(
-    mixing_ratios_by_level: NDArray[np.float64],
-    pressure_in_cgs: NDArray[np.float64],
-    temperatures_in_K: NDArray[np.float64],
-) -> NDArray[np.float64]:
-    total_number_density: NDArray[np.float64] = pressure_in_cgs / (
+    mixing_ratios_by_level: np.ndarray[np.float64],
+    pressure_in_cgs: np.ndarray[np.float64],
+    temperatures_in_K: np.ndarray[np.float64],
+) -> np.ndarray[np.float64]:
+    total_number_density: np.ndarray[np.float64] = pressure_in_cgs / (
         BOLTZMANN_CONSTANT_IN_CGS * temperatures_in_K
     )
 
@@ -164,10 +163,10 @@ def mixing_ratios_to_number_densities_by_species(
 
 
 def mixing_ratios_to_number_densities(
-    mixing_ratios_by_level: dict[str, NDArray[np.float64]],
-    pressure_in_cgs: NDArray[np.float64],
-    temperatures_in_K: NDArray[np.float64],
-) -> dict[str, NDArray[np.float64]]:
+    mixing_ratios_by_level: dict[str, np.ndarray[np.float64]],
+    pressure_in_cgs: np.ndarray[np.float64],
+    temperatures_in_K: np.ndarray[np.float64],
+) -> dict[str, np.ndarray[np.float64]]:
     return {
         species: mixing_ratios_to_number_densities_by_species(
             mixing_ratios_by_level[species],
@@ -179,13 +178,13 @@ def mixing_ratios_to_number_densities(
 
 
 def calculate_cumulative_molecular_metrics(
-    mixing_ratios_by_level: dict[str, NDArray[np.float64]],
-    pressure_in_cgs: NDArray[np.float64],
-    temperatures_in_K: NDArray[np.float64],
+    mixing_ratios_by_level: dict[str, np.ndarray[np.float64]],
+    pressure_in_cgs: np.ndarray[np.float64],
+    temperatures_in_K: np.ndarray[np.float64],
 ):
     # Probably should be implemented with xarray structures with species as a coordinate,
     # rather than as dictionaries. Okay for now.
-    number_densities_by_level: dict[str, NDArray[np.float64]] = (
+    number_densities_by_level: dict[str, np.ndarray[np.float64]] = (
         mixing_ratios_to_number_densities(
             mixing_ratios_by_level,
             pressure_in_cgs,
@@ -193,7 +192,7 @@ def calculate_cumulative_molecular_metrics(
         )
     )
 
-    mean_mixing_ratios: dict[str, NDArray[np.float64]] = {
+    mean_mixing_ratios: dict[str, np.ndarray[np.float64]] = {
         species: np.sum(
             mixing_ratios_by_level[species]
             * number_densities_by_level[species]

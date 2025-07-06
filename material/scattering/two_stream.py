@@ -1,7 +1,6 @@
 from dataclasses import astuple
 
 import numpy as np
-from numpy.typing import NDArray
 
 from material.types import TwoStreamScatteringParameters
 from xarray_functional_wrappers import Dimensionalize
@@ -20,23 +19,23 @@ from xarray_serialization import PressureDimension, WavelengthDimension
     ),
 )
 def calculate_two_stream_scattering_parameters(
-    forward_scattering_coefficients: NDArray[np.float64],
-    backward_scattering_coefficients: NDArray[np.float64],
-    absorption_coefficients: NDArray[np.float64],
+    forward_scattering_coefficients: np.ndarray[np.float64],
+    backward_scattering_coefficients: np.ndarray[np.float64],
+    absorption_coefficients: np.ndarray[np.float64],
 ) -> TwoStreamScatteringParameters:
-    total_scattering_coefficient: NDArray[np.float64] = (
+    total_scattering_coefficient: np.ndarray[np.float64] = (
         forward_scattering_coefficients + backward_scattering_coefficients
     )
 
-    total_extinction_coefficient: NDArray[np.float64] = (
+    total_extinction_coefficient: np.ndarray[np.float64] = (
         absorption_coefficients + total_scattering_coefficient
     )
 
-    scattering_asymmetry_parameter: NDArray[np.float64] = (
+    scattering_asymmetry_parameter: np.ndarray[np.float64] = (
         forward_scattering_coefficients - backward_scattering_coefficients
     ) / total_scattering_coefficient
 
-    single_scattering_albedo: NDArray[np.float64] = (
+    single_scattering_albedo: np.ndarray[np.float64] = (
         total_scattering_coefficient / total_extinction_coefficient
     )
 

@@ -1,8 +1,8 @@
-import numba
 import numpy as np
+from numba import njit
 
 
-@numba.jit(nopython=True)
+@njit(cache=True)
 def get_uniform_samples_from_monotonic_nodes(
     temperature_nodes: np.ndarray,
     lower_bound: float,
@@ -116,8 +116,8 @@ if __name__ == "__main__":
 
     # Import the generation function for verification
     # (assuming it's in the same script or imported correctly)
-    @numba.jit(nopython=True)
-    def create_monotonic_temperature_profile_from_samples_numba(
+    @njit
+    def create_monotonic_temperature_nodes_from_samples_numba(
         lower_bound,
         upper_bound,
         reference_index,
@@ -168,7 +168,7 @@ if __name__ == "__main__":
         print(f"Original proportions_up: {orig_proportions_up}")
 
         # 2. Generate a temperature profile using the original function
-        generated_nodes = create_monotonic_temperature_profile_from_samples_numba(
+        generated_nodes = create_monotonic_temperature_nodes_from_samples_numba(
             lower_temp,
             upper_temp,
             reference_index,

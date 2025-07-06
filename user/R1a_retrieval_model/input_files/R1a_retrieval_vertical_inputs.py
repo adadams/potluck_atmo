@@ -3,7 +3,6 @@ from pathlib import Path
 
 import numpy as np
 import xarray as xr
-from numpy.typing import NDArray
 
 from material.mixing_ratios import generate_uniform_mixing_ratios
 from user.input_importers import import_model_id
@@ -45,7 +44,7 @@ planet_radius_in_cm: float = 3.6318e9 / 2
 
 planet_gravity_in_cgs: float = 756.4  # cm/s^2
 
-log_pressures_by_level: NDArray[np.float64] = np.log10(pressures_by_level)
+log_pressures_by_level: np.ndarray[np.float64] = np.log10(pressures_by_level)
 
 uniform_log_abundances: dict[str, float] = {"h2o": -3.171, "ch4": -3.318}
 
@@ -70,12 +69,12 @@ def build_uniform_model_inputs(
     uniform_log_abundances: dict[str, float],
     planet_radius_in_cm: float = planet_radius_in_cm,
     planet_gravity_in_cgs: float = planet_gravity_in_cgs,
-    log_pressures_by_level: NDArray[np.float64] = log_pressures_by_level,
-    pressures_by_level: NDArray[np.float64] = pressures_by_level,
-    temperatures_by_level: NDArray[np.float64] = temperatures_by_level,
+    log_pressures_by_level: np.ndarray[np.float64] = log_pressures_by_level,
+    pressures_by_level: np.ndarray[np.float64] = pressures_by_level,
+    temperatures_by_level: np.ndarray[np.float64] = temperatures_by_level,
     filler_species: str = "h2he",
 ) -> UserVerticalModelInputs:
-    mixing_ratios_by_level: dict[str, NDArray[np.float64]] = (
+    mixing_ratios_by_level: dict[str, np.ndarray[np.float64]] = (
         generate_uniform_mixing_ratios(
             uniform_log_abundances=uniform_log_abundances,
             number_of_pressure_levels=len(pressures_by_level),
