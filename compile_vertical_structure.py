@@ -35,34 +35,20 @@ class ForwardModelXarrayInputs(NamedTuple):
 def compile_vertical_structure_for_forward_model(
     user_vertical_inputs: UserVerticalModelInputs,
 ) -> xr.Dataset:
-    pressure_coordinates: dict[str, xr.Variable] = {
-        "pressure": xr.Variable(
-            dims=("pressure",),
-            data=user_vertical_inputs.pressures_by_level,
-            attrs={"units": "bar"},
-        )
-    }
-
-    temperature_dataarray: xr.DataArray = xr.DataArray(
-        user_vertical_inputs.temperatures_by_level,
-        coords=pressure_coordinates,
-        dims=("pressure",),
-        name="temperature",
-        attrs={"units": "kelvin"},
-    )
-
     number_densities: dict[str, np.ndarray[np.float64]] = {
-        species: xr.DataArray(data=number_density_array, coords=pressure_coordinates)
+        species: xr.DataArray(
+            data=number_density_array, coords=user_vertical_inputs.pressures_by_level
+        )
         for species, number_density_array in mixing_ratios_to_number_densities(
             mixing_ratios_by_level=user_vertical_inputs.chemistry,
-            pressure_in_cgs=user_vertical_inputs.pressures_by_level * BAR_TO_BARYE,
+            pressure_in_cgs=user_vertical_inputs.pressures_by_level,  #  * BAR_TO_BARYE,
             temperatures_in_K=user_vertical_inputs.temperatures_by_level,
         ).items()
     }
 
     number_densities_dataarray: xr.Dataset = xr.Dataset(
         data_vars=number_densities,
-        coords=pressure_coordinates,
+        coords=user_vertical_inputs.pressures_by_level,
         attrs={"units": "cm^-3"},
     )
 
@@ -72,7 +58,7 @@ def compile_vertical_structure_for_forward_model(
 
     inputs_by_level: xr.Dataset = xr.Dataset(
         {
-            "temperature": temperature_dataarray,
+            "temperature": user_vertical_inputs.temperatures_by_level,
             "number_density": number_densities_dataarray,
         }
     )

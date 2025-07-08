@@ -136,9 +136,9 @@ def create_monotonic_temperature_nodes_from_samples(
 
 
 def general_piette_function(
+    profile_log_pressures: np.ndarray[(NumberofModelPressures,), LogPressureValue],
     log_pressure_nodes: np.ndarray[(NumberofNodes,), LogPressureValue],
     temperature_nodes: np.ndarray[(NumberofNodes,), TemperatureValue],
-    profile_log_pressures: np.ndarray[(NumberofModelPressures,), LogPressureValue],
     smoothing_parameter: PositiveValue = 0.3,
 ) -> np.ndarray[(NumberofModelPressures,), TemperatureValue]:
     interpolated_function: Callable[

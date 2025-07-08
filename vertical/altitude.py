@@ -1,12 +1,12 @@
 import numpy as np
 import xarray as xr
 
+from basic_types import PressureDimension
 from constants_and_conversions import (
     BOLTZMANN_CONSTANT_IN_CGS,
     GRAVITATIONAL_CONSTANT_IN_CGS,
 )
-from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import PressureDimension
+from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
 
 
 def convert_pressure_coordinate_by_level_to_by_layer(
@@ -37,6 +37,19 @@ def convert_dataset_by_pressure_levels_to_pressure_layers(
     return dataset.interp(pressure=midlayer_pressures)
 
 
+def convert_datatree_by_pressure_levels_to_pressure_layers(
+    datatree: xr.DataTree,
+) -> xr.DataTree:
+    midlayer_pressures: xr.DataArray = convert_pressure_coordinate_by_level_to_by_layer(
+        datatree
+    )
+
+    return datatree.map_over_datasets(
+        lambda dataset: dataset.interp(pressure=midlayer_pressures)
+    )
+
+
+@rename_and_unitize(new_name="path_length", units="cm")
 def altitudes_by_level_to_path_lengths(
     altitudes_by_level: xr.DataArray,
 ) -> xr.DataArray:

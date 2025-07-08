@@ -9,4 +9,3 @@ shallowest_log10_pressure = -4.0
 deepest_log10_pressure = 2.5
 number_of_levels = 71
 units = "bar"
-
