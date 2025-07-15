@@ -48,3 +48,4 @@ user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025
 user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_log_z.npy
 .gitignore
 user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_loggnormal_retrieval_2025-06-15.log
+curate_pRT_molecular_crosssections.py

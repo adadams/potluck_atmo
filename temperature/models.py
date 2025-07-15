@@ -159,8 +159,8 @@ def generate_piette_model(
     upper_temperature_bound: TemperatureValue,
 ) -> TemperatureModel:
     log_pressure_nodes: np.ndarray[(10,), np.float64] = np.array(
-        [-4, -3, -2, -1, 0, 0.5, 1, 1.5, 2, 2.5]
-    )
+        [2, 3, 4, 5, 6, 6.5, 7, 7.5, 8, 8.5]
+    )  # cgs units (1 bar = 1e6 cgs)
     number_of_pressure_nodes: int = len(log_pressure_nodes)
 
     temperature_nodes: np.ndarray[(number_of_pressure_nodes,), TemperatureValue] = (

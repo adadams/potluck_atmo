@@ -27,7 +27,6 @@ from temperature.protocols import (
     TemperatureModelInputs,
 )
 from vertical.altitude import (
-    altitudes_by_level_to_by_layer,
     altitudes_by_level_to_path_lengths,
     calculate_altitude_profile,
     convert_datatree_by_pressure_levels_to_pressure_layers,
@@ -115,7 +114,7 @@ def build_pressure_profile_from_log_pressures(
     pressures_by_level: np.ndarray = 10**log_pressures_by_level
 
     pressures_by_level_in_cgs: np.ndarray = (
-        pressures_by_level * ureg(pressure_profile_inputs.units).to("bar").magnitude
+        pressures_by_level * ureg(pressure_profile_inputs.units).to("barye").magnitude
     )
 
     log_pressures_by_level_in_cgs: np.ndarray = np.log10(pressures_by_level_in_cgs)
@@ -226,13 +225,31 @@ def compile_vertical_structure(
     temperature_profile: xr.DataArray,
     gas_chemistry: xr.Dataset,
 ) -> xr.DataTree:
-    default_vertical_structure_as_xarray: xr.Dataset = xr.Dataset(
+    planet_mass_in_g: float = calculate_mass_from_radius_and_surface_gravity(
+        fundamental_parameters.planet_radius,  # assumed to be pre-processed into cgs
+        fundamental_parameters.planet_gravity,  # assumed to be pre-processed into cgs
+    )
+
+    mean_molecular_weight_in_g: float = (
+        calculate_mean_molecular_weight(gas_chemistry) * AMU_IN_GRAMS
+    )
+
+    altitudes_by_level_in_cm: xr.DataArray = calculate_altitude_profile(
+        pressure_profile.log_pressures_by_level,
+        temperature_profile,
+        mean_molecular_weight_in_g,
+        fundamental_parameters.planet_radius,
+        planet_mass_in_g,
+    ).assign_coords(pressure=pressure_profile.pressure)
+
+    vertical_structure_by_level: xr.Dataset = xr.Dataset(
         data_vars={
             "planet_radius_in_cm": fundamental_parameters.planet_radius,
             "planet_gravity_in_cgs": fundamental_parameters.planet_gravity,
             "pressures_by_level": pressure_profile.pressure,
             "log_pressures_by_level": pressure_profile.log_pressures_by_level,
             "temperatures_by_level": temperature_profile,
+            "altitudes_by_level": altitudes_by_level_in_cm,
         },
         coords={
             "pressure": pressure_profile.pressure,
@@ -242,141 +259,104 @@ def compile_vertical_structure(
             # "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         },
     )
-
-    chemistry_node: xr.DataTree = xr.DataTree(name="chemistry", dataset=gas_chemistry)
-
-    default_vertical_structure_datatree: xr.DataTree = xr.DataTree(
-        name="vertical_structure",
-        dataset=default_vertical_structure_as_xarray,
-        children={"chemistry": chemistry_node},
+    vertical_structure_by_level_node: xr.DataTree = xr.DataTree(
+        name="vertical_structure", dataset=vertical_structure_by_level
     )
 
-    return default_vertical_structure_datatree
+    number_densities_by_level: xr.Dataset = xr.Dataset(
+        data_vars={
+            species: xr.DataArray(
+                data=number_density_array, coords=pressure_profile.coords
+            )
+            for species, number_density_array in mixing_ratios_to_number_densities(
+                mixing_ratios_by_level=gas_chemistry,
+                pressure_in_cgs=pressure_profile.pressure,  #  * BAR_TO_BARYE,
+                temperatures_in_K=temperature_profile,
+            ).items()
+        },
+        coords={
+            "pressure": pressure_profile.pressure,
+        },
+        attrs={"units": "cm^-3"},
+    )
+    number_densities_by_level_node: xr.DataTree = xr.DataTree(
+        name="number_densities", dataset=number_densities_by_level
+    )
+
+    atmospheric_structure_by_level: xr.DataTree = xr.DataTree(
+        name="atmospheric_structure",
+        children={
+            "vertical_structure": vertical_structure_by_level_node,
+            "gas_number_densities": number_densities_by_level_node,
+        },
+    )
+
+    atmospheric_structure_by_layer: xr.DataTree = (
+        convert_datatree_by_pressure_levels_to_pressure_layers(
+            atmospheric_structure_by_level
+        )
+    )
+
+    path_lengths_by_layer_in_cm: xr.DataArray = altitudes_by_level_to_path_lengths(
+        altitudes_by_level_in_cm
+    )
+
+    atmospheric_structure_by_layer["vertical_structure"] = (
+        atmospheric_structure_by_layer["vertical_structure"].assign(
+            {"path_lengths": path_lengths_by_layer_in_cm}
+        )
+    )
+
+    return atmospheric_structure_by_layer
 
 
 def build_forward_model(
-    vertical_structure: xr.DataTree,
+    atmospheric_structure_by_layer: xr.DataTree,
     crosssection_catalog_dataset: xr.Dataset,
     output_wavelengths: xr.DataArray,
     distance_to_system_in_cm: PositiveValue,
     stellar_radius_in_cm: PositiveValue,
 ) -> xr.DataTree:
-    mean_molecular_weight_in_g: float = (
-        calculate_mean_molecular_weight(vertical_structure.chemistry) * AMU_IN_GRAMS
-    )
-
-    planet_mass_in_g: float = calculate_mass_from_radius_and_surface_gravity(
-        vertical_structure.planet_radius_in_cm,
-        vertical_structure.planet_gravity_in_cgs,
-    )
-
-    altitudes_in_cm: xr.DataArray = xr.DataArray(
-        data=calculate_altitude_profile(
-            vertical_structure.log_pressures_by_level,
-            vertical_structure.temperatures_by_level,
-            mean_molecular_weight_in_g,
-            vertical_structure.planet_radius_in_cm,
-            planet_mass_in_g,
-        ),
-        coords={
-            "pressure": xr.Variable(
-                dims="pressure",
-                data=vertical_structure.pressures_by_level,
-                attrs={"units": "bar"},
-            )
-        },
-        dims=("pressure",),
-        name="altitude",
-        attrs={"units": "cm"},
-    )
-
-    path_lengths_by_layer: xr.DataArray = altitudes_by_level_to_path_lengths(
-        altitudes_in_cm
-    ).to_dataset()
-
-    altitudes_by_layer: xr.DataArray = altitudes_by_level_to_by_layer(
-        altitudes_in_cm
-    ).to_dataset()
-
-    path_length_node: xr.DataTree = xr.DataTree(
-        name="path_lengths_by_layer", dataset=path_lengths_by_layer
-    )
-
-    altitude_node: xr.DataTree = xr.DataTree(
-        name="altitudes_by_layer", dataset=altitudes_by_layer
-    )
-
     distance_to_system_in_cm_as_xarray: xr.Dataset = xr.DataArray(
         data=distance_to_system_in_cm,
         dims=tuple(),
         attrs={"units": "cm"},
-        name="distance_to_system_in_cm",
-    ).to_dataset()
-    distance_node: xr.DataTree = xr.DataTree(
-        name="distance_to_system_in_cm", dataset=distance_to_system_in_cm_as_xarray
+        name="distance_to_system",
     )
 
     stellar_radius_in_cm_as_xarray: xr.Dataset = xr.DataArray(
         data=stellar_radius_in_cm,
         dims=tuple(),
         attrs={"units": "cm"},
-        name="stellar_radius_in_cm",
-    ).to_dataset()
-    stellar_radius_node: xr.DataTree = xr.DataTree(
-        name="stellar_radius_in_cm", dataset=stellar_radius_in_cm_as_xarray
+        name="stellar_radius",
     )
 
-    number_densities_by_level: xr.Dataset = xr.Dataset(
-        data_vars={
-            species: xr.DataArray(
-                data=number_density_array, coords=vertical_structure.coords
-            )
-            for species, number_density_array in mixing_ratios_to_number_densities(
-                mixing_ratios_by_level=vertical_structure.chemistry,
-                pressure_in_cgs=vertical_structure.pressures_by_level,  #  * BAR_TO_BARYE,
-                temperatures_in_K=vertical_structure.temperatures_by_level,
-            ).items()
+    observable_parameter_dataset: xr.Dataset = xr.merge(
+        [
+            distance_to_system_in_cm_as_xarray,
+            stellar_radius_in_cm_as_xarray,
+            output_wavelengths,
+        ]
+    )
+
+    observable_parameter_node: xr.DataTree = xr.DataTree(
+        name="observable_parameters", dataset=observable_parameter_dataset
+    )
+
+    crosssection_catalog_node: xr.DataTree = xr.DataTree(
+        name="crosssection_catalog", dataset=crosssection_catalog_dataset
+    )
+
+    atmospheric_model: xr.DataTree = xr.DataTree(
+        name="atmospheric_model",
+        children={
+            "atmospheric_structure_by_layer": atmospheric_structure_by_layer,
+            "observable_parameters": observable_parameter_node,
+            "crosssection_catalog": crosssection_catalog_node,
         },
-        coords=vertical_structure.coords,
-        attrs={"units": "cm^-3"},
-    )
-    number_density_node: xr.DataTree = xr.DataTree(
-        name="number_densities_by_level", dataset=number_densities_by_level
     )
 
-    vertical_structure_by_level: xr.DataTree = vertical_structure.assign(
-        items={
-            "number_densities_by_level": number_density_node,
-        }
-    )
-    print(f"{vertical_structure_by_level=}")
-
-    vertical_structure_by_layer: xr.DataTree = (
-        convert_datatree_by_pressure_levels_to_pressure_layers(
-            vertical_structure_by_level
-        )
-    )
-
-    # vertical_structure_by_layer.children["chemistry"].children[
-    #    "number_densities_by_level"
-    # ] = number_densities_by_level
-
-    # vertical_structure_by_level.children["chemistry"].children[
-    #    "number_densities_by_level"
-    # ] = number_densities_by_level
-
-    return (
-        vertical_structure_by_layer.assign(
-            items={
-                "path_lengths_by_layer": path_length_node,
-                "altitudes_by_layer": altitude_node,
-                "distance_to_system_in_cm": distance_node,
-                "stellar_radius_in_cm": stellar_radius_node,
-            }
-        ),
-        crosssection_catalog_dataset,
-        output_wavelengths,
-    )
+    return atmospheric_model
 
 
 if __name__ == "__main__":
@@ -416,7 +396,7 @@ if __name__ == "__main__":
 
     test_model_inputs = import_module("test_model_inputs")
 
-    test_vertical_structure: xr.DataTree = compile_vertical_structure(
+    test_atmospheric_structure: xr.DataTree = compile_vertical_structure(
         fundamental_parameters=test_model_inputs.fundamental_parameters,
         pressure_profile=test_model_inputs.pressure_profile,
         temperature_profile=test_model_inputs.temperature_profile,
@@ -444,7 +424,7 @@ if __name__ == "__main__":
     stellar_radius_in_cm: float = 1.53054e10
 
     test_forward_model_structure: xr.DataTree = build_forward_model(
-        vertical_structure=test_vertical_structure,
+        atmospheric_structure_by_layer=test_atmospheric_structure,
         crosssection_catalog_dataset=crosssection_catalog_dataset,
         output_wavelengths=output_wavelengths,
         distance_to_system_in_cm=distance_to_system_in_cm,
