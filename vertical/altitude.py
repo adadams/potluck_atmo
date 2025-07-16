@@ -114,25 +114,11 @@ def convert_datatree_by_pressure_levels_to_pressure_layers(
 def altitudes_by_level_to_path_lengths(
     altitudes_by_level: xr.DataArray,
 ) -> xr.DataArray:
-    path_lengths: xr.DataArray = -altitudes_by_level.diff("pressure").assign_attrs(
-        units=altitudes_by_level.attrs["units"]
-    )
-
-    midlayer_pressures: xr.DataArray = convert_coordinate_by_level_to_by_layer(
-        altitudes_by_level.pressure
-    )
-
-    return path_lengths.assign_coords(pressure=midlayer_pressures)
+    return -calculate_change_across_pressure_layer(altitudes_by_level)
 
 
-def altitudes_by_level_to_by_layer(
-    altitudes_by_level: xr.DataArray,
-) -> xr.DataArray:
-    midlayer_pressures: xr.DataArray = convert_coordinate_by_level_to_by_layer(
-        altitudes_by_level.pressure
-    )
-
-    return altitudes_by_level.interp(pressure=midlayer_pressures)
+def altitudes_by_level_to_by_layer(altitudes_by_level: xr.DataArray) -> xr.DataArray:
+    return convert_dataarray_by_pressure_levels_to_pressure_layers(altitudes_by_level)
 
 
 @set_result_name_and_units(new_name="altitude", units="cm")
