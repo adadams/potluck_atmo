@@ -1,9 +1,9 @@
 import numpy as np
 import xarray as xr
 
+from basic_types import PressureDimension, WavelengthDimension
 from material.scattering.types import TwoStreamScatteringCoefficients
 from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import PressureDimension, WavelengthDimension
 
 REFERENCE_FREQUENCY_IN_HZ: float = 5.0872638e14
 C_IN_CGS: float = 2.99792458e10

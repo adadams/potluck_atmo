@@ -1,10 +1,10 @@
 import numpy as np
 
-from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
-from xarray_serialization import PressureDimension, WavelengthDimension
+from basic_types import PressureDimension, WavelengthDimension
+from xarray_functional_wrappers import Dimensionalize, set_result_name_and_units
 
 
-@rename_and_unitize(new_name="transit_depth", units="dimensionless")
+@set_result_name_and_units(new_name="transit_depth", units="dimensionless")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthDimension, PressureDimension),

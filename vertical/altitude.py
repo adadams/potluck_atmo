@@ -1,3 +1,5 @@
+from collections.abc import KeysView
+
 import jax
 import numpy as np
 import xarray as xr
@@ -8,25 +10,54 @@ from constants_and_conversions import (
     BOLTZMANN_CONSTANT_IN_CGS,
     GRAVITATIONAL_CONSTANT_IN_CGS,
 )
-from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
+from xarray_functional_wrappers import (
+    Dimensionalize,
+    XarrayStructure,
+    set_result_name_and_units,
+)
 
 
-def convert_pressure_coordinate_by_level_to_by_layer(
-    dataset: xr.DataArray,
-) -> xr.DataArray:
-    if "pressure" not in dataset.coords:
-        raise ValueError("Dataset must have pressure as a coordinate.")
-
-    midlayer_pressures: np.ndarray = np.sqrt(
-        dataset.pressure.to_numpy()[1:] * dataset.pressure.to_numpy()[:-1]
+def convert_coordinate_by_level_to_by_layer(coordinate: xr.DataArray) -> xr.DataArray:
+    midlayer_values: np.ndarray = np.sqrt(
+        coordinate.to_numpy()[1:] * coordinate.to_numpy()[:-1]
     )
 
     return xr.DataArray(
-        data=midlayer_pressures,
-        dims=("pressure",),
-        name="pressure",
-        attrs={"units": dataset.pressure.attrs["units"]},
+        data=midlayer_values,
+        dims=(coordinate.name,),
+        name=coordinate.name,
+        attrs=coordinate.attrs,
     )
+
+
+def convert_data_by_level_to_by_layer(
+    xarray_structure: XarrayStructure, coordinate_name: str = "pressure"
+) -> XarrayStructure:
+    if coordinate_name not in xarray_structure.coords:
+        raise ValueError(f"Dataset must have {coordinate_name} as a coordinate.")
+
+    return None
+
+
+def convert_dataarray_by_pressure_levels_to_pressure_layers(
+    dataarray: xr.DataArray, strict: bool = False
+) -> xr.DataArray:
+    if "pressure" not in dataarray.coords:
+        if strict:
+            raise ValueError("Dataarray must have pressure as a coordinate.")
+        else:
+            print("Dataarray does not have pressure as a coordinate.")
+            return dataarray
+
+    midlayer_pressures: xr.DataArray = convert_coordinate_by_level_to_by_layer(
+        dataarray.pressure
+    )
+
+    dataarray_by_layer: xr.DataArray = dataarray.interp(
+        pressure=midlayer_pressures
+    ).rename(dataarray.name.replace("level", "layer"))
+
+    return dataarray_by_layer
 
 
 def convert_dataset_by_pressure_levels_to_pressure_layers(
@@ -39,15 +70,15 @@ def convert_dataset_by_pressure_levels_to_pressure_layers(
             print("Dataset does not have pressure as a coordinate.")
             return dataset
 
-    variable_names: set = dataset.data_vars.keys()
+    variable_names: KeysView[str] = dataset.data_vars.keys()
 
-    variable_names_by_layer = {
+    variable_names_by_layer: dict[str, str] = {
         variable_name: variable_name.replace("level", "layer")
         for variable_name in variable_names
     }
 
-    midlayer_pressures: xr.DataArray = convert_pressure_coordinate_by_level_to_by_layer(
-        dataset
+    midlayer_pressures: xr.DataArray = convert_coordinate_by_level_to_by_layer(
+        dataset.pressure
     )
 
     dataset_interpolated_to_layers: xr.Dataset = dataset.interp(
@@ -55,6 +86,20 @@ def convert_dataset_by_pressure_levels_to_pressure_layers(
     ).rename(variable_names_by_layer)
 
     return dataset_interpolated_to_layers
+
+
+def calculate_change_across_pressure_layer(dataarray: xr.DataArray) -> xr.DataArray:
+    midlayer_pressures: xr.DataArray = convert_coordinate_by_level_to_by_layer(
+        dataarray.pressure
+    )
+
+    delta_dataarray: xr.DataArray = (
+        dataarray.diff("pressure")
+        .assign_coords(pressure=midlayer_pressures)
+        .rename(f"delta_{dataarray.name.replace('level', 'layer')}")
+    )
+
+    return delta_dataarray
 
 
 def convert_datatree_by_pressure_levels_to_pressure_layers(
@@ -65,18 +110,16 @@ def convert_datatree_by_pressure_levels_to_pressure_layers(
     )
 
 
-@rename_and_unitize(new_name="path_length", units="cm")
+@set_result_name_and_units(new_name="path_length", units="cm")
 def altitudes_by_level_to_path_lengths(
     altitudes_by_level: xr.DataArray,
 ) -> xr.DataArray:
-    print(f"{altitudes_by_level.pressure.attrs=}")
-
     path_lengths: xr.DataArray = -altitudes_by_level.diff("pressure").assign_attrs(
         units=altitudes_by_level.attrs["units"]
     )
 
-    midlayer_pressures: xr.DataArray = convert_pressure_coordinate_by_level_to_by_layer(
-        altitudes_by_level
+    midlayer_pressures: xr.DataArray = convert_coordinate_by_level_to_by_layer(
+        altitudes_by_level.pressure
     )
 
     return path_lengths.assign_coords(pressure=midlayer_pressures)
@@ -85,14 +128,14 @@ def altitudes_by_level_to_path_lengths(
 def altitudes_by_level_to_by_layer(
     altitudes_by_level: xr.DataArray,
 ) -> xr.DataArray:
-    midlayer_pressures: xr.DataArray = convert_pressure_coordinate_by_level_to_by_layer(
-        altitudes_by_level
+    midlayer_pressures: xr.DataArray = convert_coordinate_by_level_to_by_layer(
+        altitudes_by_level.pressure
     )
 
     return altitudes_by_level.interp(pressure=midlayer_pressures)
 
 
-@rename_and_unitize(new_name="altitude", units="cm")
+@set_result_name_and_units(new_name="altitude", units="cm")
 @Dimensionalize(
     argument_dimensions=(
         (PressureDimension,),
@@ -137,7 +180,7 @@ def calculate_altitude_profile(
     return jnp.append(jnp.array([0.0]), altitudes)[::-1]
 
 
-@rename_and_unitize(new_name="altitude", units="cm")
+@set_result_name_and_units(new_name="altitude", units="cm")
 @Dimensionalize(
     argument_dimensions=(
         (PressureDimension,),

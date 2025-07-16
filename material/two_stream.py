@@ -55,9 +55,7 @@ def compile_composite_two_stream_parameters(
 ) -> TwoStreamParameters:
     scattering_coefficients: TwoStreamScatteringCoefficients = (
         calculate_two_stream_scattering_components(
-            wavelengths_in_cm,
-            crosssections,
-            number_density,
+            wavelengths_in_cm, crosssections, number_density
         )
     )
 

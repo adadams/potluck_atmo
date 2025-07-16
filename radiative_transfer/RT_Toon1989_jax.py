@@ -7,12 +7,8 @@ import xarray as xr
 from jax import Array
 
 from basic_functional_tools import interleave_with_jax as interleave
-from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
-from xarray_serialization import (
-    CosineAngleDimension,
-    PressureDimension,
-    WavelengthDimension,
-)
+from basic_types import CosineAngleDimension, PressureDimension, WavelengthDimension
+from xarray_functional_wrappers import Dimensionalize, set_result_name_and_units
 
 jax.config.update("jax_enable_x64", True)
 
@@ -88,7 +84,7 @@ class RTToon1989Inputs:
     )
 
 
-@rename_and_unitize(new_name="emitted_twostream_flux", units="erg s^-1 cm^-3")
+@set_result_name_and_units(new_name="emitted_twostream_flux", units="erg s^-1 cm^-3")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthDimension, PressureDimension),

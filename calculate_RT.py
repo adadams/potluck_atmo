@@ -25,7 +25,7 @@ from radiative_transfer.RT_one_stream import (
 from radiative_transfer.RT_Toon1989_jax import RT_Toon1989, RTToon1989Inputs
 from spectrum.bin import resample_spectral_quantity_to_new_wavelengths
 from user.input_structs import UserForwardModelInputs
-from xarray_functional_wrappers import XarrayOutputs
+from xarray_functional_wrappers import XarrayOutputs, convert_units
 
 current_directory: Path = Path(__file__).parent
 
@@ -282,6 +282,94 @@ def calculate_observed_fluxes_via_two_stream(
         * (
             user_forward_model_inputs.vertical_inputs.planet_radius_in_cm
             / user_forward_model_inputs.distance_to_system_in_cm
+        )
+        ** 2
+    ).rename("observed_twostream_flux")
+
+    return observed_twostream_flux
+
+
+def calculate_observed_fluxes_via_two_stream_with_datatree_inputs(
+    forward_model_inputs: xr.DataTree,
+    precalculated_crosssection_catalog: Optional[xr.Dataset] = None,
+) -> XarrayOutputs:
+    temperatures_by_level: xr.DataArray = (
+        forward_model_inputs["temperature_profile_by_level"].to_dataset().temperature
+    )
+
+    atmospheric_structure_by_layer: xr.DataArray = forward_model_inputs[
+        "atmospheric_structure_by_layer"
+    ]
+    vertical_structure_by_layer: xr.DataArray = atmospheric_structure_by_layer[
+        "vertical_structure"
+    ]
+
+    pressures_by_layer: xr.DataArray = vertical_structure_by_layer.pressures_by_layer
+
+    number_densities_by_layer: xr.DataArray = (
+        atmospheric_structure_by_layer["gas_number_densities"]
+        .to_dataset()
+        .to_dataarray(dim="species")
+    )
+
+    if precalculated_crosssection_catalog is None:
+        temperatures_by_layer: xr.DataArray = (
+            vertical_structure_by_layer.temperatures_by_layer
+        )
+
+        species_present_in_model: list[str] = number_densities_by_layer.species.values
+
+        crosssection_catalog_dataset_interpolated_to_model: xr.Dataset = (
+            curate_crosssection_catalog(
+                crosssection_catalog_dataset=forward_model_inputs["reference_data"][
+                    "crosssection_catalog"
+                ].to_dataset(),
+                temperatures_by_layer=temperatures_by_layer,
+                pressures_by_layer=pressures_by_layer,
+                species_present_in_model=species_present_in_model,
+            )
+        )
+
+    else:
+        crosssection_catalog_dataset_interpolated_to_model: xr.Dataset = convert_units(
+            precalculated_crosssection_catalog,
+            {"wavelength": "cm", "pressure": "barye"},
+        )
+
+    model_wavelengths_in_cm: xr.DataArray = (
+        crosssection_catalog_dataset_interpolated_to_model.wavelength
+    )
+
+    thermal_intensities: xr.Dataset = compile_thermal_structure_for_forward_model(
+        temperatures_by_level=temperatures_by_level,
+        model_wavelengths_in_cm=model_wavelengths_in_cm,
+    )
+
+    path_lengths_in_cm: xr.DataArray = vertical_structure_by_layer.path_lengths
+
+    # TODO: there is probably a way to extend "set_result_name_and_units" so we can remove the tuple/class-like return structures
+    two_stream_parameters: TwoStreamParameters = (
+        compile_composite_two_stream_parameters(
+            wavelengths_in_cm=model_wavelengths_in_cm,
+            crosssections=crosssection_catalog_dataset_interpolated_to_model,
+            number_density=number_densities_by_layer,
+            path_lengths=path_lengths_in_cm,
+        )
+    )
+
+    RT_Toon1989_inputs: RTToon1989Inputs = RTToon1989Inputs(
+        thermal_intensity=thermal_intensities.thermal_intensity_by_layer,
+        delta_thermal_intensity=thermal_intensities.delta_thermal_intensity_by_layer,
+        **asdict(two_stream_parameters),
+    )
+
+    emitted_twostream_flux: xr.DataArray = RT_Toon1989(*astuple(RT_Toon1989_inputs))
+
+    observed_twostream_flux: xr.DataArray = (
+        emitted_twostream_flux
+        * (
+            vertical_structure_by_layer.planet_radius
+            / forward_model_inputs["observable_parameters"].distance_to_system
         )
         ** 2
     ).rename("observed_twostream_flux")

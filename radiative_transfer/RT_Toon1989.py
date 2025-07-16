@@ -5,12 +5,8 @@ import numpy as np
 import xarray as xr
 
 from basic_functional_tools import interleave
-from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
-from xarray_serialization import (
-    CosineAngleDimension,
-    PressureDimension,
-    WavelengthDimension,
-)
+from basic_types import CosineAngleDimension, PressureDimension, WavelengthDimension
+from xarray_functional_wrappers import Dimensionalize, set_result_name_and_units
 
 MAXIMUM_EXP_FLOAT: Final[float] = 5.0
 
@@ -80,7 +76,7 @@ class RTToon1989Inputs:
     )
 
 
-@rename_and_unitize(new_name="emitted_twostream_flux", units="erg s^-1 cm^-3")
+@set_result_name_and_units(new_name="emitted_twostream_flux", units="erg s^-1 cm^-3")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthDimension, PressureDimension),

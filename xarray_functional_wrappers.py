@@ -13,11 +13,15 @@ from typing import (
     TypeAlias,
 )
 
+import numpy as np
+import pint_xarray  # noqa: F401
 import xarray as xr
 from decopatch import DECORATED, function_decorator
 
 from basic_types import DimensionAnnotation
 from xarray_serialization import XarrayDimension
+
+XarrayStructure: TypeAlias = xr.Dataset | xr.DataArray
 
 ArgumentDimensionType: TypeAlias = Tuple[DimensionAnnotation]
 FunctionDimensionType: TypeAlias = Tuple[ArgumentDimensionType]
@@ -134,9 +138,36 @@ class Dimensionalize:
                 input_core_dims=self._argument_dimension_names,
                 output_core_dims=self._result_dimension_names,
                 vectorize=self.vectorizable,
+                keep_attrs=True,
             )
 
         return apply_ufunc_wrapper
+
+
+def call_meshgrid_on_xarray(
+    xarray_structure_x: xr.DataArray,
+    xarray_structure_y: xr.DataArray,
+    **meshgrid_kwargs,
+):
+    # assumes xarray_structure_x and xarray_structure_y each have one dimension
+    # that are distinct
+    if not isinstance(xarray_structure_x, xr.DataArray) or not isinstance(
+        xarray_structure_y, xr.DataArray
+    ):
+        raise TypeError("Both arguments must be of type xr.DataArray.")
+
+    return xr.apply_ufunc(
+        np.meshgrid,
+        xarray_structure_x,
+        xarray_structure_y,
+        input_core_dims=(xarray_structure_x.dims, xarray_structure_y.dims),
+        output_core_dims=(
+            [*xarray_structure_y.dims, *xarray_structure_x.dims],
+            [*xarray_structure_y.dims, *xarray_structure_x.dims],
+        ),
+        keep_attrs=True,
+        kwargs=meshgrid_kwargs,
+    )
 
 
 # TODO: can we use this to define our structural types? xarray datasets would be one
@@ -147,22 +178,103 @@ class Dimensionalize:
 
 
 @function_decorator
-def rename_and_unitize(new_name: str, units: str, function=DECORATED) -> Callable:
+def set_result_name_and_units(
+    new_name: str | Mapping[str, str],
+    units: str | Mapping[str, str],
+    function=DECORATED,
+) -> Callable:
     @wraps(function)
     def wrapper(*args, **kwargs):
         result = function(*args, **kwargs)
         if isinstance(result, xr.DataArray):
             result = result.rename(new_name).assign_attrs(units=units)
         elif isinstance(result, xr.Dataset):
-            result = result.rename({var: new_name for var in result.data_vars})
+            result = result.rename({var: new_name[var] for var in result.data_vars})
             for var in result.data_vars:
-                result[var].attrs["units"] = units
+                result[var].attrs["units"] = units[var]
         return result
 
     return wrapper
 
 
-XarrayOutputs: TypeAlias = Mapping[str, xr.DataArray | xr.Dataset]
+def convert_units(
+    xarray_structure: XarrayStructure | xr.DataTree,
+    new_variable_units: Mapping[str, str],
+) -> XarrayStructure:
+    def map_over_dataarray(
+        xarray_structure: xr.DataArray, new_variable_units: Mapping[str, str]
+    ) -> xr.DataArray:
+        for variable_name, units in new_variable_units.items():
+            if variable_name == xarray_structure.name:
+                xarray_structure: xr.DataArray = (
+                    xarray_structure.pint.quantify().pint.to(units).pint.dequantify()
+                )
+
+            elif variable_name in xarray_structure.coords:
+                xarray_structure: xr.DataArray = xarray_structure.assign_coords(
+                    {
+                        variable_name: xarray_structure[variable_name]
+                        .pint.quantify()
+                        .pint.to(units)
+                        .pint.dequantify()
+                        for variable_name, units in new_variable_units.items()
+                    }
+                )
+
+            else:
+                raise ValueError(
+                    "Variable name(s) either need to be the name of the dataarray, "
+                    "or need to be present in the coordinates of the dataarray."
+                )
+
+        return xarray_structure
+
+    if isinstance(xarray_structure, xr.DataArray):
+        return map_over_dataarray(xarray_structure, new_variable_units)
+
+    def map_over_dataset(
+        xarray_structure: xr.Dataset, new_variable_units: Mapping[str, str]
+    ):
+        all_variables_present: bool = all(
+            variable_name in xarray_structure.data_vars
+            or variable_name in xarray_structure.coords
+            for variable_name in new_variable_units
+        )
+
+        if not all_variables_present:
+            raise ValueError(
+                "All variables in new_variable_units must be present in xarray_structure. "
+                f"Missing variables: {set(new_variable_units.keys()) - set(xarray_structure.data_vars.keys())}."
+            )
+
+        else:
+            xarray_structure: xr.Dataset = xarray_structure.assign(
+                {
+                    variable_name: xarray_structure[variable_name]
+                    .pint.quantify()
+                    .pint.to(units)
+                    .pint.dequantify()
+                    for variable_name, units in new_variable_units.items()
+                }
+            )
+
+        return xarray_structure
+
+    if isinstance(xarray_structure, xr.Dataset):
+        return map_over_dataset(xarray_structure, new_variable_units)
+
+    elif isinstance(xarray_structure, xr.DataTree):
+        return xarray_structure.map_over_datasets(
+            partial(map_over_dataset, new_variable_units=new_variable_units)
+        )
+
+
+# Generator of an empty tuple, purely for clarity of purpose.
+def set_dimensionless_quantity() -> tuple:
+    return tuple()
+
+
+XarrayOutputs: TypeAlias = Mapping[str, XarrayStructure]
 
 
 class ProducesXarrayOutputs(Protocol):

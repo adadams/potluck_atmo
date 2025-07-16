@@ -2,9 +2,9 @@ from dataclasses import astuple
 
 import numpy as np
 
+from basic_types import PressureDimension, WavelengthDimension
 from material.types import TwoStreamScatteringParameters
 from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import PressureDimension, WavelengthDimension
 
 
 @Dimensionalize(

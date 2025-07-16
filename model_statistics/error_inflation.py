@@ -1,7 +1,7 @@
 import numpy as np
 
+from basic_types import WavelengthDimension
 from xarray_functional_wrappers import Dimensionalize
-from xarray_serialization import WavelengthDimension
 
 
 @Dimensionalize(

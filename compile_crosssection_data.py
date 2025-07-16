@@ -11,6 +11,7 @@ def curate_crosssection_catalog(
         pressure=pressures_by_layer, temperature=temperatures_by_layer, method="linear"
     )
 
+    # a "trick" to make sure the species are in the same order
     interpolated_crosssection_catalog_with_model_species: xr.Dataset = (
         interpolated_crosssection_catalog.get(species_present_in_model)
     )
@@ -18,7 +19,7 @@ def curate_crosssection_catalog(
     interpolated_crosssection_catalog_as_dataarray: xr.DataArray = (
         interpolated_crosssection_catalog_with_model_species.to_array(
             dim="species", name="crosssections"
-        ).sortby("species")
+        )
     )
 
     return interpolated_crosssection_catalog_as_dataarray

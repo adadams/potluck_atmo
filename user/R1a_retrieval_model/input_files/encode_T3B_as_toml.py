@@ -3,12 +3,7 @@ from pathlib import Path
 import msgspec
 import pandas as pd
 
-from xarray_serialization import (
-    AltitudeValue,
-    MixingRatioValue,
-    PressureValue,
-    TemperatureValue,
-)
+from basic_types import MixingRatioValue, PressureValue, TemperatureValue
 
 
 class RISOTTOVerticalInputs(msgspec.Struct):

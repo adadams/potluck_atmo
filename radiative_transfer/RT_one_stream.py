@@ -4,12 +4,8 @@ from typing import Final
 import numpy as np
 import xarray as xr
 
-from xarray_functional_wrappers import Dimensionalize, rename_and_unitize
-from xarray_serialization import (
-    CosineAngleDimension,
-    PressureDimension,
-    WavelengthDimension,
-)
+from basic_types import CosineAngleDimension, PressureDimension, WavelengthDimension
+from xarray_functional_wrappers import Dimensionalize, set_result_name_and_units
 
 STREAM_COSINE_ANGLES: Final[np.ndarray[np.float64]] = np.array(
     [
@@ -76,7 +72,7 @@ class OneStreamRTInputs:
     )
 
 
-@rename_and_unitize(new_name="emitted_onestream_flux", units="erg s^-1 cm^-3")
+@set_result_name_and_units(new_name="emitted_onestream_flux", units="erg s^-1 cm^-3")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthDimension, PressureDimension),
