@@ -1,11 +1,50 @@
-[build_default_fundamental_parameters]
-planet_radius = 7.776098627
+[fundamental_parameters] # build_default_fundamental_parameters
+planet_radius = 7.776098627 
 planet_gravity = 13613.2622
 radius_units = "Earth_radius"
 gravity_units = "cm/s^2"
 
-[build_pressure_profile_from_log_pressures]
+[pressure_profile] # build_pressure_profile_from_log_pressures
 shallowest_log10_pressure = -4.0
-deepest_log10_pressure = 2.5
+deepest_log10_pressure =    2.5
 number_of_levels = 71
 units = "bar"
+
+[temperature_profile]
+[temperature_profile.model_inputs] # build_temperature_profile -> generate_piette_model
+lower_temperature_bound = 75.0
+upper_temperature_bound = 3975.0
+
+[temperature_profile.model_parameters] # build_temperature_profile -> generate_piette_model -> PietteTemperatureModelArguments
+photospheric_scaled_3bar_temperature =  0.2889458091719745
+scaled_1bar_temperature =               0.11159102
+scaled_0p1bar_temperature =             0.02182628
+scaled_0p01bar_temperature =            0.12510834
+scaled_0p001bar_temperature =           0.10768672
+scaled_0p0001bar_temperature =          0.01539343
+scaled_10bar_temperature =              0.02514635
+scaled_30bar_temperature =              0.01982915
+scaled_100bar_temperature =             0.06249186
+scaled_300bar_temperature =             0.32445998
+
+[gas_chemistry] # build_uniform_gas_chemistry
+filler_species = "h2"
+
+[gas_chemistry.log_mixing_ratios]
+"h2o" =         -5.940043768
+"co" =          -5.695578981
+"co2" =         -8.884468544
+"ch4" =         -7.663836048
+"Lupu_alk" =    -4.953393893
+"h2s" =         -11.42842546
+"nh3" =         -10.1409949
+
+[observable_inputs]
+distance_to_system_in_cm =  63.0
+stellar_radius_in_cm =      1.53054e10
+distance_units = "parsec"
+radius_units = "cm"
+
+[metadata]
+model_ID = "test_model"
+run_date = "2025-07-16"

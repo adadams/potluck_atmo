@@ -4,7 +4,7 @@ import numpy as np
 
 from basic_types import TemperatureValue
 from temperature.models import (
-    PietteTemperatureModelInputs,
+    PietteTemperatureModelParameters,
     generate_piette_model,
 )
 from temperature.protocols import TemperatureModel
@@ -29,8 +29,8 @@ if __name__ == "__main__":
         proportions_down = np.random.uniform(0, 1, size=reference_index)
         proportions_up = np.random.uniform(0, 1, size=num_nodes - 1 - reference_index)
 
-        piette_model_inputs: PietteTemperatureModelInputs = (
-            PietteTemperatureModelInputs(
+        piette_model_inputs: PietteTemperatureModelParameters = (
+            PietteTemperatureModelParameters(
                 photospheric_scaled_3bar_temperature, *proportions_down, *proportions_up
             )
         )
@@ -53,8 +53,10 @@ if __name__ == "__main__":
     proportions_down = np.random.uniform(0, 1, size=reference_index)
     proportions_up = np.random.uniform(0, 1, size=num_nodes - 1 - reference_index)
 
-    piette_model_inputs: PietteTemperatureModelInputs = PietteTemperatureModelInputs(
-        photospheric_scaled_3bar_temperature, *proportions_down, *proportions_up
+    piette_model_inputs: PietteTemperatureModelParameters = (
+        PietteTemperatureModelParameters(
+            photospheric_scaled_3bar_temperature, *proportions_down, *proportions_up
+        )
     )
 
     piette: TemperatureModel = generate_piette_model(

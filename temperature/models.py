@@ -2,6 +2,7 @@ from collections.abc import Callable
 from functools import partial
 from typing import Tuple, TypeVar
 
+import msgspec
 import numpy as np
 from msgspec.structs import astuple
 from numba import njit
@@ -14,13 +15,18 @@ from basic_types import (
     PositiveValue,
     TemperatureValue,
 )
-from temperature.protocols import TemperatureModel, TemperatureModelInputs
+from temperature.protocols import TemperatureModel, TemperatureModelParameters
 
 NumberofNodes = TypeVar("NumberofNodes", bound=Tuple[int, ...])  # numpy ndarray shape
 NumberofModelPressures = TypeVar("NumberofModelPressures", bound=Tuple[int, ...])
 
 
-class PietteTemperatureModelInputs(TemperatureModelInputs):
+class TemperatureBounds(msgspec.Struct):
+    lower_temperature_bound: TemperatureValue
+    upper_temperature_bound: TemperatureValue
+
+
+class PietteTemperatureModelParameters(TemperatureModelParameters):
     photospheric_scaled_3bar_temperature: NormalizedValue
     scaled_1bar_temperature: NormalizedValue
     scaled_0p1bar_temperature: NormalizedValue
@@ -154,9 +160,8 @@ def general_piette_function(
 
 
 def generate_piette_model(
-    piette_parameters: PietteTemperatureModelInputs,
-    lower_temperature_bound: TemperatureValue,
-    upper_temperature_bound: TemperatureValue,
+    model_parameters: PietteTemperatureModelParameters,
+    model_inputs: TemperatureBounds,
 ) -> TemperatureModel:
     log_pressure_nodes: np.ndarray[(10,), np.float64] = np.array(
         [2, 3, 4, 5, 6, 6.5, 7, 7.5, 8, 8.5]
@@ -165,9 +170,8 @@ def generate_piette_model(
 
     temperature_nodes: np.ndarray[(number_of_pressure_nodes,), TemperatureValue] = (
         create_monotonic_temperature_nodes_from_samples(
-            *astuple(piette_parameters),
-            lower_temperature_bound,
-            upper_temperature_bound,
+            *astuple(model_parameters),
+            *astuple(model_inputs),
         )
     )
 

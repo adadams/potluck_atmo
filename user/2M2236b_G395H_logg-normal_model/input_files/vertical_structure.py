@@ -3,14 +3,14 @@ from datetime import datetime
 import xarray as xr
 
 from material.mixing_ratios import MixingRatios, generate_uniform_mixing_ratios
-from temperature.models import generate_piette_model
-from temperature.protocols import TemperatureModelInputs
-from template_model_structs import (
+from model_builders.default_builders import (
     FundamentalParameterInputs,
     PressureProfile,
     build_default_fundamental_parameters,
     build_temperature_profile,
 )
+from temperature.models import generate_piette_model
+from temperature.protocols import TemperatureModelInputs
 from user.input_structs import UserVerticalModelInputs
 
 

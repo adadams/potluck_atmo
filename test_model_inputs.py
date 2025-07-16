@@ -1,67 +1,99 @@
+from functools import partial
+from pathlib import Path
+from typing import Final
+
+import msgspec
 import xarray as xr
 
-from temperature.models import PietteTemperatureModelInputs, generate_piette_model
-from template_model_structs import (
+from model_builders.default_builders import (
     FundamentalParameterInputs,
+    ObservableInputs,
     PressureProfileInputs,
     UniformGasChemistryInputs,
     build_default_fundamental_parameters,
+    build_observable_inputs,
     build_pressure_profile_from_log_pressures,
     build_temperature_profile,
     build_uniform_gas_chemistry,
 )
+from temperature import models as temperature_models
+from temperature.protocols import TemperatureModelConstructor
+from xarray_serialization import SerializablePrimitiveType
+
+current_directory: Path = Path(__file__).parent
+
+PARSEC_TO_CM: Final[float] = 3.08567758128e18
+
+
+class TemperatureModelArguments(msgspec.Struct, kw_only=True):
+    model_constructor: str = "generate_piette_model"
+    model_inputs: temperature_models.TemperatureBounds
+    model_parameters: temperature_models.PietteTemperatureModelParameters
+
+
+class TestModelInputs(msgspec.Struct):
+    fundamental_parameters: FundamentalParameterInputs
+    pressure_profile: PressureProfileInputs
+    temperature_profile: TemperatureModelArguments
+    gas_chemistry: UniformGasChemistryInputs
+    observable_inputs: ObservableInputs
+    metadata: dict[str, SerializablePrimitiveType]
+
+
+input_toml_filepath: Path = current_directory / "test_model_inputs.toml"
+with open(input_toml_filepath, "rb") as input_toml_file:
+    inputs_from_toml_file: dict = msgspec.toml.decode(
+        input_toml_file.read(), type=TestModelInputs
+    )
 
 fundamental_parameters: xr.Dataset = build_default_fundamental_parameters(
-    FundamentalParameterInputs(
-        planet_radius=7.776098627,
-        planet_gravity=13613.2622,
-        radius_units="Earth_radius",
-        gravity_units="cm/s^2",
-    )
+    inputs_from_toml_file.fundamental_parameters
 )
 
 pressure_profile: xr.Dataset = build_pressure_profile_from_log_pressures(
-    PressureProfileInputs(
-        shallowest_log10_pressure=-4.0,
-        deepest_log10_pressure=2.5,
-        number_of_levels=71,
-        units="bar",
-    )
+    inputs_from_toml_file.pressure_profile
 )
 
+temperature_model_constructor: TemperatureModelConstructor = partial(
+    getattr(
+        temperature_models,
+        inputs_from_toml_file.temperature_profile.model_constructor,
+    ),
+    model_inputs=inputs_from_toml_file.temperature_profile.model_inputs,
+)
+
+
 temperature_profile: xr.Dataset = build_temperature_profile(
-    temperature_model_constructor=generate_piette_model,
-    temperature_model_inputs={
-        "piette_parameters": PietteTemperatureModelInputs(
-            photospheric_scaled_3bar_temperature=0.2889458091719745,
-            scaled_1bar_temperature=0.11159102,
-            scaled_0p1bar_temperature=0.02182628,
-            scaled_0p01bar_temperature=0.12510834,
-            scaled_0p001bar_temperature=0.10768672,
-            scaled_0p0001bar_temperature=0.01539343,
-            scaled_10bar_temperature=0.02514635,
-            scaled_30bar_temperature=0.01982915,
-            scaled_100bar_temperature=0.06249186,
-            scaled_300bar_temperature=0.32445998,
-        ),
-        "lower_temperature_bound": 75.0,
-        "upper_temperature_bound": 3975.0,
-    },
+    temperature_model_constructor=temperature_model_constructor,
+    temperature_model_parameters=inputs_from_toml_file.temperature_profile.model_parameters,
     pressure_profile=pressure_profile,
 )
 
 gas_chemistry: xr.Dataset = build_uniform_gas_chemistry(
-    UniformGasChemistryInputs(
-        log_mixing_ratios={
-            "h2o": -5.940043768,
-            "co": -5.695578981,
-            "co2": -8.884468544,
-            "ch4": -7.663836048,
-            "Lupu_alk": -4.953393893,
-            "h2s": -11.42842546,
-            "nh3": -10.14099491,
-        },
-        filler_species="h2",
-    ),
+    gas_chemistry_inputs=inputs_from_toml_file.gas_chemistry,
     pressure_profile=pressure_profile,
 )
+
+reference_model_filepath: Path = (
+    current_directory / "test_reference_model_for_wavelengths.nc"
+)
+reference_model: xr.Dataset = xr.open_dataset(reference_model_filepath)
+output_wavelengths: xr.DataArray = reference_model.wavelength.assign_attrs(
+    units="micron"
+)
+
+observable_inputs: xr.Dataset = build_observable_inputs(
+    observable_inputs=inputs_from_toml_file.observable_inputs,
+    output_wavelengths=output_wavelengths,
+)
+
+opacity_catalog: str = "jwst50k"  # "jwst50k", "wide-jwst", "wide"
+
+reference_data_directory: Path = Path("/media/gba8kj/Orange")
+# reference_data_directory: Path = Path("/Volumes/Orange")
+opacities_directory: Path = reference_data_directory / "Opacities_0v10" / "gases"
+catalog_filepath: Path = opacities_directory / f"{opacity_catalog}.nc"
+
+crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(catalog_filepath)
+
+model_metadata: dict[str, SerializablePrimitiveType] = inputs_from_toml_file.metadata

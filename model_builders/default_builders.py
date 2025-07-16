@@ -1,6 +1,3 @@
-import inspect
-from collections.abc import Callable
-from importlib import import_module
 from pathlib import Path
 from typing import Any, Final, Optional, TypeAlias
 
@@ -11,8 +8,8 @@ from jax import numpy as jnp
 from pint import UnitRegistry
 
 from basic_types import PositiveValue, PressureDimension
-from calculate_RT import calculate_observed_fluxes_via_two_stream_with_datatree_inputs
-from constants_and_conversions import AMU_IN_GRAMS, PARSEC_TO_CM
+from calculate_RT import calculate_observed_fluxes_via_two_stream
+from constants_and_conversions import AMU_IN_GRAMS
 from density import calculate_mass_from_radius_and_surface_gravity
 from material.gases.molecular_metrics import (
     calculate_mean_molecular_weight,
@@ -26,7 +23,7 @@ from spectrum.bin import resample_spectral_quantity_to_new_wavelengths
 from temperature.protocols import (
     TemperatureModel,
     TemperatureModelConstructor,
-    TemperatureModelInputs,
+    TemperatureModelParameters,
 )
 from vertical.altitude import (
     altitudes_by_level_to_path_lengths,
@@ -43,7 +40,7 @@ from xarray_functional_wrappers import (
 from xarray_serialization import AttrsType
 
 current_directory: Path = Path(__file__).parent
-project_directory: Path = current_directory
+project_directory: Path = current_directory.parent
 
 DEFAULT_UNITS_SYSTEM: Final[str] = "cgs"
 ureg: UnitRegistry = UnitRegistry(system=DEFAULT_UNITS_SYSTEM)
@@ -92,7 +89,7 @@ def build_default_fundamental_parameters(
         attrs={"units": "cm/s^2"},
     )
 
-    return xr.Dataset(
+    fundamental_parameter_dataset: xr.Dataset = xr.Dataset(
         data_vars={
             "planet_radius": planet_radius_in_cm_as_xarray,
             "planet_gravity": planet_gravity_in_cgs_as_xarray,
@@ -100,6 +97,8 @@ def build_default_fundamental_parameters(
         coords={},
         attrs=additional_attributes,
     )
+
+    return fundamental_parameter_dataset
 
 
 class PressureProfileInputs(msgspec.Struct):
@@ -148,11 +147,13 @@ def build_pressure_profile_from_log_pressures(
         attrs={"units": "log10(barye)"},
     )
 
-    return xr.Dataset(
+    pressure_profile_dataset: xr.Dataset = xr.Dataset(
         data_vars={"log_pressures_by_level": log_pressures_by_level_as_xarray},
         coords={"pressure": pressures_by_level_as_xarray},
         attrs=additional_attributes,
     )
+
+    return pressure_profile_dataset
 
 
 class UniformGasChemistryInputs(msgspec.Struct):
@@ -166,11 +167,6 @@ def build_uniform_gas_chemistry(
 ) -> GasChemistryProfile:
     log_mixing_ratios: UniformLogMixingRatios = gas_chemistry_inputs.log_mixing_ratios
     filler_species: str = gas_chemistry_inputs.filler_species
-    additional_attributes: dict[str, Any] = (
-        gas_chemistry_inputs.additional_attributes
-        if gas_chemistry_inputs.additional_attributes is not None
-        else {}
-    )
 
     number_of_pressure_levels: int = len(pressure_profile.pressure)
 
@@ -180,6 +176,12 @@ def build_uniform_gas_chemistry(
             number_of_pressure_levels=number_of_pressure_levels,
             filler_species=filler_species,
         )
+    )
+
+    additional_attributes: AttrsType = (
+        gas_chemistry_inputs.additional_attributes
+        if gas_chemistry_inputs.additional_attributes is not None
+        else {}
     )
 
     mixing_ratios_by_level_as_xarray: xr.Dataset = xr.Dataset(
@@ -193,10 +195,6 @@ def build_uniform_gas_chemistry(
         },
         coords=pressure_profile.coords,
         attrs=additional_attributes,
-        # attrs={
-        #     "model_ID": model_id,
-        #     "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # },
     )
 
     return mixing_ratios_by_level_as_xarray
@@ -204,11 +202,11 @@ def build_uniform_gas_chemistry(
 
 def build_temperature_profile(
     temperature_model_constructor: TemperatureModelConstructor,
-    temperature_model_inputs: TemperatureModelInputs,
+    temperature_model_parameters: TemperatureModelParameters,
     pressure_profile: PressureProfile,
 ) -> TemperatureProfile:
     temperature_model: TemperatureModel = temperature_model_constructor(
-        **temperature_model_inputs
+        model_parameters=temperature_model_parameters
     )
 
     temperature_model_for_xarray: TemperatureModel = set_result_name_and_units(
@@ -232,6 +230,7 @@ def compile_vertical_structure(
     pressure_profile: xr.Dataset,
     temperature_profile: xr.DataArray,
     gas_chemistry: xr.Dataset,
+    additional_attributes: Optional[AttrsType] = None,
 ) -> xr.DataTree:
     planet_mass_in_g: float = calculate_mass_from_radius_and_surface_gravity(
         fundamental_parameters.planet_radius,  # assumed to be pre-processed into cgs
@@ -250,6 +249,10 @@ def compile_vertical_structure(
         planet_mass_in_g,
     ).assign_coords(pressure=pressure_profile.pressure)
 
+    additional_attributes: AttrsType = (
+        additional_attributes if additional_attributes is not None else {}
+    )
+
     vertical_structure_by_level: xr.Dataset = xr.Dataset(
         data_vars={
             "planet_radius": fundamental_parameters.planet_radius,
@@ -262,10 +265,7 @@ def compile_vertical_structure(
         coords={
             "pressure": pressure_profile.pressure,
         },
-        attrs={
-            # "model_ID": model_id,
-            # "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        },
+        attrs=additional_attributes,
     )
     vertical_structure_by_level_node: xr.DataTree = xr.DataTree(
         name="vertical_structure", dataset=vertical_structure_by_level
@@ -282,10 +282,8 @@ def compile_vertical_structure(
                 temperatures_in_K=temperature_profile,
             ).items()
         },
-        coords={
-            "pressure": pressure_profile.pressure,
-        },
-        attrs={"units": "cm^-3"},
+        coords={"pressure": pressure_profile.pressure},
+        attrs={"units": "cm^-3", **additional_attributes},
     )
     number_densities_by_level_node: xr.DataTree = xr.DataTree(
         name="number_densities", dataset=number_densities_by_level
@@ -318,43 +316,62 @@ def compile_vertical_structure(
     return atmospheric_structure_by_layer
 
 
-def build_forward_model(
-    atmospheric_structure_by_layer: xr.DataTree,
-    temperature_profile: xr.DataArray,
-    crosssection_catalog_dataset: xr.Dataset,
+class ObservableInputs(msgspec.Struct):
+    distance_to_system_in_cm: PositiveValue
+    stellar_radius_in_cm: PositiveValue
+    distance_units: str
+    radius_units: str
+
+
+def build_observable_inputs(
+    observable_inputs: ObservableInputs,
     output_wavelengths: xr.DataArray,
-    distance_to_system_in_cm: PositiveValue,
-    stellar_radius_in_cm: PositiveValue,
-) -> xr.DataTree:
+    additional_attributes: Optional[AttrsType] = None,
+) -> xr.Dataset:
     distance_to_system_in_cm_as_xarray: xr.DataArray = xr.DataArray(
-        data=distance_to_system_in_cm,
-        dims=tuple(),  # i.e. a dimensionless quantity
-        attrs={"units": "cm"},
+        data=observable_inputs.distance_to_system_in_cm,
+        dims=set_dimensionless_quantity(),
+        attrs={"units": observable_inputs.distance_units},
         name="distance_to_system",
     )
 
     stellar_radius_in_cm_as_xarray: xr.DataArray = xr.DataArray(
-        data=stellar_radius_in_cm,
-        dims=tuple(),  # i.e. a dimensionless quantity
-        attrs={"units": "cm"},
+        data=observable_inputs.stellar_radius_in_cm,
+        dims=set_dimensionless_quantity(),
+        attrs={"units": observable_inputs.radius_units},
         name="stellar_radius",
     )
 
-    observable_parameters: tuple[XarrayStructure, ...] = (
-        distance_to_system_in_cm_as_xarray,
-        stellar_radius_in_cm_as_xarray,
+    observable_input_dataarrays: tuple[XarrayStructure, ...] = (
+        convert_units(distance_to_system_in_cm_as_xarray, {"distance_to_system": "cm"}),
+        convert_units(stellar_radius_in_cm_as_xarray, {"stellar_radius": "cm"}),
     )
 
     output_wavelengths_in_cm: xr.Variable = convert_units(
         output_wavelengths, {"wavelength": "cm"}
     )
 
-    observable_parameter_dataset: xr.Dataset = xr.merge(
-        observable_parameters
-    ).assign_coords(wavelength=xr.as_variable(output_wavelengths_in_cm))
+    additional_attributes: AttrsType = (
+        additional_attributes if additional_attributes is not None else {}
+    )
 
+    observable_input_dataset: xr.Dataset = (
+        xr.merge(observable_input_dataarrays)
+        .assign_coords(wavelength=xr.as_variable(output_wavelengths_in_cm))
+        .assign_attrs(**additional_attributes)
+    )
+
+    return observable_input_dataset
+
+
+def build_forward_model(
+    atmospheric_structure_by_layer: xr.DataTree,
+    temperature_profile: xr.DataArray,
+    crosssection_catalog_dataset: xr.Dataset,
+    observable_inputs: xr.Dataset,
+) -> xr.DataTree:
     observable_parameter_node: xr.DataTree = xr.DataTree(
-        name="observable_parameters", dataset=observable_parameter_dataset
+        name="observable_parameters", dataset=observable_inputs
     )
 
     crosssection_catalog_with_wavelengths_in_cm = convert_units(
@@ -391,7 +408,7 @@ def build_forward_model(
 def calculate_emission_model(
     forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
 ) -> float:
-    emission_fluxes = calculate_observed_fluxes_via_two_stream_with_datatree_inputs(
+    emission_fluxes = calculate_observed_fluxes_via_two_stream(
         forward_model_inputs=forward_model_inputs,
         precalculated_crosssection_catalog=None,
     )
@@ -414,87 +431,3 @@ def calculate_emission_model(
     ).rename("resampled_emission_flux")
 
     return emission_fluxes_sampled_to_data
-
-
-if __name__ == "__main__":
-    test_model_inputs_filepath: Path = current_directory / "test_model_inputs.toml"
-    test_model_inputs_as_py_filepath: Path = current_directory / "test_model_inputs.py"
-
-    with open(test_model_inputs_filepath, "rb") as file:
-        test_model_inputs: FundamentalParameterInputs = msgspec.toml.decode(
-            file.read()  # , type=FundamentalParameterInputs
-        )
-
-    for (
-        model_component_function_name,
-        model_component_parameter_set,
-    ) in test_model_inputs.items():
-        model_component_function: Callable = getattr(
-            __import__(__name__), model_component_function_name
-        )
-
-        # get the type signature of the only argument of this function
-        model_component_function_signature = inspect.signature(
-            model_component_function
-        ).parameters
-
-        model_component_function_arguments_class: type = list(
-            model_component_function_signature.values()
-        )[0].annotation
-
-        model_component_function_arguments = model_component_function_arguments_class(
-            **model_component_parameter_set
-        )
-        # print(f"{model_component_function_arguments=}")
-
-        test_output = model_component_function(model_component_function_arguments)
-
-        # print(f"{test_output=}")
-
-    test_model_inputs = import_module("test_model_inputs")
-
-    test_atmospheric_structure: xr.DataTree = compile_vertical_structure(
-        fundamental_parameters=test_model_inputs.fundamental_parameters,
-        pressure_profile=test_model_inputs.pressure_profile,
-        temperature_profile=test_model_inputs.temperature_profile,
-        gas_chemistry=test_model_inputs.gas_chemistry,
-    )
-
-    opacity_catalog: str = "jwst50k"  # "jwst50k", "wide-jwst", "wide"
-
-    # opacities_directory: Path = Path("/Volumes/Orange") / "Opacities_0v10"
-    opacities_directory: Path = Path("/media/gba8kj/Orange") / "Opacities_0v10"
-    opacity_data_directory: Path = opacities_directory / "gases"
-
-    catalog_filepath: Path = opacity_data_directory / f"{opacity_catalog}.nc"
-    crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(catalog_filepath)
-
-    reference_model_filepath: Path = (
-        current_directory / "2M2236b_NIRSpec_G395H_R500_APOLLO.nc"
-    )
-    reference_model: xr.Dataset = xr.open_dataset(reference_model_filepath)
-    output_wavelengths: xr.DataArray = reference_model.wavelength
-    output_wavelengths.attrs["units"] = "micron"
-
-    distance_to_system_in_cm: float = 63.0 * PARSEC_TO_CM  # 64.5
-    stellar_radius_in_cm: float = 1.53054e10
-
-    test_forward_model_structure: xr.DataTree = build_forward_model(
-        atmospheric_structure_by_layer=test_atmospheric_structure,
-        temperature_profile=test_model_inputs.temperature_profile,
-        crosssection_catalog_dataset=crosssection_catalog_dataset,
-        output_wavelengths=output_wavelengths,
-        distance_to_system_in_cm=distance_to_system_in_cm,
-        stellar_radius_in_cm=stellar_radius_in_cm,
-    )
-
-    test_forward_model_structure.to_netcdf(
-        current_directory / "test_forward_model_structure.nc"
-    )
-
-    test_emission_model: xr.DataTree = calculate_emission_model(
-        forward_model_inputs=test_forward_model_structure,
-        resampling_fwhm_fraction=0.1,
-    )
-
-    test_emission_model.to_netcdf(current_directory / "test_emission_model.nc")

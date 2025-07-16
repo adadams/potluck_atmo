@@ -13,9 +13,12 @@ class TemperatureModel(Protocol):
 
 
 TemperatureModelInputs: TypeAlias = msgspec.Struct
+TemperatureModelParameters: TypeAlias = msgspec.Struct
 
 
 class TemperatureModelConstructor(Protocol):
     def __call__(
-        self, temperature_model_inputs: TemperatureModelInputs
+        self,
+        temperature_model_inputs: TemperatureModelInputs,
+        temperature_model_parameters: TemperatureModelParameters,
     ) -> TemperatureModel: ...
