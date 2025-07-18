@@ -37,7 +37,7 @@ compiled_vertical_structure: xr.Dataset = compile_vertical_structure_for_forward
 ).by_layer
 
 precurated_crosssection_catalog: xr.Dataset = curate_crosssection_catalog(
-    crosssection_catalog_dataset=default_forward_model_inputs.crosssection_catalog,
+    crosssection_catalog=default_forward_model_inputs.crosssection_catalog,
     temperatures_by_layer=compiled_vertical_structure.temperature,
     pressures_by_layer=compiled_vertical_structure.pressure,
     species_present_in_model=compiled_vertical_structure.number_density.species.values,

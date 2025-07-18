@@ -34,7 +34,7 @@ opacities_directory: Path = Path("/media/gba8kj/Orange") / "Opacities_0v10"
 opacity_data_directory: Path = opacities_directory / "gases"
 
 catalog_filepath: Path = opacity_data_directory / f"{opacity_catalog}.nc"
-crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(catalog_filepath)
+crosssection_catalog: xr.Dataset = xr.open_dataset(catalog_filepath)
 
 reference_model_filepath: Path = (
     model_directory / "2M2236b_NIRSpec_G395H_R500_APOLLO.nc"
@@ -79,7 +79,7 @@ stellar_radius_in_cm_as_xarray: xr.DataArray = xr.DataArray(
 
 def build_forward_model(
     vertical_structure: xr.DataTree,
-    crosssection_catalog_dataset: xr.Dataset = crosssection_catalog_dataset,
+    crosssection_catalog: xr.Dataset = crosssection_catalog,
     output_wavelengths: xr.DataArray = reference_model_wavelengths,
     distance_to_system_in_cm: float = distance_to_system_in_cm,
     stellar_radius_in_cm: float = stellar_radius_in_cm,
@@ -121,7 +121,7 @@ def build_forward_model(
 
     return UserForwardModelInputs(
         vertical_inputs=vertical_structure,
-        crosssection_catalog=crosssection_catalog_dataset,
+        crosssection_catalog=crosssection_catalog,
         output_wavelengths=output_wavelengths,
         path_lengths_by_layer=path_lengths_by_layer,
         altitudes_by_layer=altitudes_by_layer,

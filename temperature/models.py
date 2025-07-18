@@ -26,31 +26,31 @@ class TemperatureBounds(msgspec.Struct):
     upper_temperature_bound: TemperatureValue
 
 
-class PietteTemperatureModelParameters(TemperatureModelParameters):
-    photospheric_scaled_3bar_temperature: NormalizedValue
-    scaled_1bar_temperature: NormalizedValue
-    scaled_0p1bar_temperature: NormalizedValue
-    scaled_0p01bar_temperature: NormalizedValue
-    scaled_0p001bar_temperature: NormalizedValue
-    scaled_0p0001bar_temperature: NormalizedValue
-    scaled_10bar_temperature: NormalizedValue
-    scaled_30bar_temperature: NormalizedValue
-    scaled_100bar_temperature: NormalizedValue
-    scaled_300bar_temperature: NormalizedValue
+class PietteTemperatureModelSamples(msgspec.Struct):
+    photospheric_temperature_3bar: TemperatureValue
+    scaled_temperature_1bar: NormalizedValue
+    scaled_temperature_0p1bar: NormalizedValue
+    scaled_temperature_0p01bar: NormalizedValue
+    scaled_temperature_0p001bar: NormalizedValue
+    scaled_temperature_0p0001bar: NormalizedValue
+    scaled_temperature_10bar: NormalizedValue
+    scaled_temperature_30bar: NormalizedValue
+    scaled_temperature_100bar: NormalizedValue
+    scaled_temperature_300bar: NormalizedValue
 
 
 @njit(cache=True)
 def create_monotonic_temperature_nodes_from_samples(
-    photospheric_scaled_3bar_temperature: NormalizedValue,
-    scaled_1bar_temperature: NormalizedValue,
-    scaled_0p1bar_temperature: NormalizedValue,
-    scaled_0p01bar_temperature: NormalizedValue,
-    scaled_0p001bar_temperature: NormalizedValue,
-    scaled_0p0001bar_temperature: NormalizedValue,
-    scaled_10bar_temperature: NormalizedValue,
-    scaled_30bar_temperature: NormalizedValue,
-    scaled_100bar_temperature: NormalizedValue,
-    scaled_300bar_temperature: NormalizedValue,
+    photospheric_temperature_3bar: TemperatureValue,
+    scaled_temperature_1bar: NormalizedValue,
+    scaled_temperature_0p1bar: NormalizedValue,
+    scaled_temperature_0p01bar: NormalizedValue,
+    scaled_temperature_0p001bar: NormalizedValue,
+    scaled_temperature_0p0001bar: NormalizedValue,
+    scaled_temperature_10bar: NormalizedValue,
+    scaled_temperature_30bar: NormalizedValue,
+    scaled_temperature_100bar: NormalizedValue,
+    scaled_temperature_300bar: NormalizedValue,
     lower_temperature_bound: TemperatureValue,  # usually fixed, set by e.g. opacity temperature range
     upper_temperature_bound: TemperatureValue,  # usually fixed, set by e.g. opacity temperature range
 ) -> np.ndarray[(10,), TemperatureValue]:
@@ -65,21 +65,21 @@ def create_monotonic_temperature_nodes_from_samples(
         (number_of_pressure_nodes - photospheric_index,), NormalizedValue
     ] = np.array(
         [
-            scaled_1bar_temperature,
-            scaled_0p1bar_temperature,
-            scaled_0p01bar_temperature,
-            scaled_0p001bar_temperature,
-            scaled_0p0001bar_temperature,
+            scaled_temperature_1bar,
+            scaled_temperature_0p1bar,
+            scaled_temperature_0p01bar,
+            scaled_temperature_0p001bar,
+            scaled_temperature_0p0001bar,
         ]
     )
     proportions_deeper: np.ndarray[
         ((number_of_pressure_nodes - photospheric_index) - 1,), NormalizedValue
     ] = np.array(
         [
-            scaled_10bar_temperature,
-            scaled_30bar_temperature,
-            scaled_100bar_temperature,
-            scaled_300bar_temperature,
+            scaled_temperature_10bar,
+            scaled_temperature_30bar,
+            scaled_temperature_100bar,
+            scaled_temperature_300bar,
         ]
     )
 
@@ -89,14 +89,9 @@ def create_monotonic_temperature_nodes_from_samples(
 
     # Back out the physical temperature at 3 bars, which is the fiducial photosphere,
     # given its fractional position between the lower and upper bound of the valid temperatures.
-    photospheric_temperature: TemperatureValue = (
-        lower_temperature_bound
-        + photospheric_scaled_3bar_temperature
-        * (upper_temperature_bound - lower_temperature_bound)
-    )
-    temperatures[photospheric_index] = photospheric_temperature
+    temperatures[photospheric_index] = photospheric_temperature_3bar
 
-    current_temperature: TemperatureValue = photospheric_temperature
+    current_temperature: TemperatureValue = photospheric_temperature_3bar
     remaining_shallower_range: TemperatureValue = (
         current_temperature - lower_temperature_bound
     )
@@ -118,7 +113,7 @@ def create_monotonic_temperature_nodes_from_samples(
         current_temperature: TemperatureValue = temperatures[i]
 
     # Sample from the photospheric temperature to the bottom of the (model) atmosphere
-    current_temperature: TemperatureValue = photospheric_temperature
+    current_temperature: TemperatureValue = photospheric_temperature_3bar
     remaining_upward_range: TemperatureValue = (
         upper_temperature_bound - current_temperature
     )
@@ -159,20 +154,29 @@ def general_piette_function(
     return TP_profile
 
 
+class PietteTemperatureModelParameters(TemperatureModelParameters):
+    temperature_0p0001bar: TemperatureValue
+    temperature_0p001bar: TemperatureValue
+    temperature_0p01bar: TemperatureValue
+    temperature_0p1bar: TemperatureValue
+    temperature_1bar: TemperatureValue
+    photospheric_temperature_3bar: TemperatureValue
+    temperature_10bar: TemperatureValue
+    temperature_30bar: TemperatureValue
+    temperature_100bar: TemperatureValue
+    temperature_300bar: TemperatureValue
+
+
 def generate_piette_model(
     model_parameters: PietteTemperatureModelParameters,
-    model_inputs: TemperatureBounds,
 ) -> TemperatureModel:
     log_pressure_nodes: np.ndarray[(10,), np.float64] = np.array(
         [2, 3, 4, 5, 6, 6.5, 7, 7.5, 8, 8.5]
-    )  # cgs units (1 bar = 1e6 cgs)
+    )  # cgs units (1 bar = 1e6 cgs "barye")
     number_of_pressure_nodes: int = len(log_pressure_nodes)
 
     temperature_nodes: np.ndarray[(number_of_pressure_nodes,), TemperatureValue] = (
-        create_monotonic_temperature_nodes_from_samples(
-            *astuple(model_parameters),
-            *astuple(model_inputs),
-        )
+        np.asarray(astuple(model_parameters))
     )
 
     return partial(

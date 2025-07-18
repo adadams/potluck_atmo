@@ -36,7 +36,7 @@ default_forward_model_inputs: UserForwardModelInputs = (
 )
 
 precurated_crosssection_catalog: xr.Dataset = (
-    forward_model_module.precurated_crosssection_catalog_dataset
+    forward_model_module.precurated_crosssection_catalog
 )
 
 data: xr.Dataset = forward_model_module.data_dataset

@@ -44,7 +44,7 @@ fraction_of_reddest_fwhm_to_convolve_with: float = 0.01
 
 observed_fluxes: dict[str, xr.DataArray] = calculate_observed_fluxes(
     default_forward_model_inputs,
-    precalculated_crosssection_catalog=forward_model_module.crosssection_catalog_dataset,
+    precalculated_crosssection_catalog=forward_model_module.crosssection_catalog,
 )
 
 observed_fluxes_sampled_to_data: xr.DataArray = (

@@ -5,6 +5,7 @@ from inspect import signature
 from pathlib import Path
 from typing import (
     Any,
+    Final,
     List,
     NamedTuple,
     Optional,
@@ -14,12 +15,21 @@ from typing import (
 )
 
 import numpy as np
-import pint_xarray  # noqa: F401
+import pint_xarray
 import xarray as xr
 from decopatch import DECORATED, function_decorator
+from pint import UnitRegistry
 
 from basic_types import DimensionAnnotation
 from xarray_serialization import XarrayDimension
+
+current_directory: Path = Path(__file__).parent
+project_directory: Path = current_directory
+
+DEFAULT_UNITS_SYSTEM: Final[str] = "cgs"
+ureg: UnitRegistry = UnitRegistry(system=DEFAULT_UNITS_SYSTEM)
+ureg.load_definitions(str(project_directory / "additional_units.txt"))
+ureg = pint_xarray.setup_registry(ureg)
 
 XarrayStructure: TypeAlias = xr.Dataset | xr.DataArray
 
@@ -207,14 +217,16 @@ def convert_units(
         for variable_name, units in new_variable_units.items():
             if variable_name == xarray_structure.name:
                 xarray_structure: xr.DataArray = (
-                    xarray_structure.pint.quantify().pint.to(units).pint.dequantify()
+                    xarray_structure.pint.quantify(unit_registry=ureg)
+                    .pint.to(units)
+                    .pint.dequantify()
                 )
 
             elif variable_name in xarray_structure.coords:
                 xarray_structure: xr.DataArray = xarray_structure.assign_coords(
                     {
                         variable_name: xarray_structure[variable_name]
-                        .pint.quantify()
+                        .pint.quantify(unit_registry=ureg)
                         .pint.to(units)
                         .pint.dequantify()
                         for variable_name, units in new_variable_units.items()

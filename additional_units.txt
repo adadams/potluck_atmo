@@ -4,5 +4,8 @@ Earth_radius = 6.371e8 * centimeters = R_earth = R_Earth = _ = Earth_radii
 Jupiter_mass = 1.898e30 * grams = M_jup = M_Jup = _ = Jupiter_masses
 Jupiter_radius = 11.2 * Earth_radii = R_jup = R_Jup = _ = Jupiter_radii
 
+Solar_mass = 1.98892e30 * grams = M_sun = M_Sun = _ = Solar_masses
+Solar_radius = 6.957e10 * centimeters = R_sun = R_Sun = _ = Solar_radii
+
 log10_invs2 = 1 / seconds**2; logbase: 10; logfactor: 1
 log10_cm = centimeters; logbase: 10; logfactor: 1

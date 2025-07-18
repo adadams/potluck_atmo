@@ -25,11 +25,12 @@ from radiative_transfer.RT_one_stream import (
 from radiative_transfer.RT_Toon1989_jax import RT_Toon1989, RTToon1989Inputs
 from spectrum.bin import resample_spectral_quantity_to_new_wavelengths
 from user.input_structs import UserForwardModelInputs
-from xarray_functional_wrappers import XarrayOutputs, convert_units
+from xarray_functional_wrappers import XarrayOutputs
 
 current_directory: Path = Path(__file__).parent
 
 
+# TODO: update with datatree input approach
 def calculate_observed_transmission_spectrum(
     user_forward_model_inputs: UserForwardModelInputs,
     precalculated_crosssection_catalog: Optional[xr.Dataset] = None,
@@ -48,19 +49,19 @@ def calculate_observed_transmission_spectrum(
     species_present_in_model: list[str] = number_densities_by_layer.species.values
 
     if precalculated_crosssection_catalog is None:
-        crosssection_catalog_dataset_interpolated_to_model: xr.Dataset = curate_crosssection_catalog(
-            crosssection_catalog_dataset=user_forward_model_inputs.crosssection_catalog,
-            temperatures_by_layer=vertical_structure_dataset_by_layer.temperature,
-            pressures_by_layer=vertical_structure_dataset_by_layer.pressure,
-            species_present_in_model=species_present_in_model,
+        crosssection_catalog_interpolated_to_model: xr.Dataset = (
+            curate_crosssection_catalog(
+                crosssection_catalog=user_forward_model_inputs.crosssection_catalog,
+                temperatures_by_layer=vertical_structure_dataset_by_layer.temperature,
+                pressures_by_layer=vertical_structure_dataset_by_layer.pressure,
+                species_present_in_model=species_present_in_model,
+            )
         )
     else:
-        crosssection_catalog_dataset_interpolated_to_model = (
-            precalculated_crosssection_catalog
-        )
+        crosssection_catalog_interpolated_to_model = precalculated_crosssection_catalog
 
     absorption_coefficients: xr.Dataset = crosssections_to_attenuation_coefficients(
-        crosssection_catalog_dataset_interpolated_to_model,
+        crosssection_catalog_interpolated_to_model,
         vertical_structure_dataset_by_layer.number_density,
     )
 
@@ -83,6 +84,7 @@ def calculate_observed_transmission_spectrum(
     return transmission_flux
 
 
+# TODO: update with datatree input approach
 def calculate_observed_fluxes(
     user_forward_model_inputs: UserForwardModelInputs,
     precalculated_crosssection_catalog: Optional[xr.Dataset] = None,
@@ -112,20 +114,22 @@ def calculate_observed_fluxes(
 
         species_present_in_model: list[str] = number_densities_by_layer.species.values
 
-        crosssection_catalog_dataset_interpolated_to_model: xr.Dataset = curate_crosssection_catalog(
-            crosssection_catalog_dataset=user_forward_model_inputs.crosssection_catalog,
-            temperatures_by_layer=temperatures_by_layer,
-            pressures_by_layer=pressures_by_layer,
-            species_present_in_model=species_present_in_model,
+        crosssection_catalog_interpolated_to_model: xr.Dataset = (
+            curate_crosssection_catalog(
+                crosssection_catalog=user_forward_model_inputs.crosssection_catalog,
+                temperatures_by_layer=temperatures_by_layer,
+                pressures_by_layer=pressures_by_layer,
+                species_present_in_model=species_present_in_model,
+            )
         )
 
     else:
-        crosssection_catalog_dataset_interpolated_to_model: xr.Dataset = (
+        crosssection_catalog_interpolated_to_model: xr.Dataset = (
             precalculated_crosssection_catalog
         )
 
     model_wavelengths_in_microns: xr.DataArray = (
-        crosssection_catalog_dataset_interpolated_to_model.wavelength
+        crosssection_catalog_interpolated_to_model.wavelength
     )
     model_wavelengths_in_cm = model_wavelengths_in_microns * MICRONS_TO_CM
 
@@ -144,7 +148,7 @@ def calculate_observed_fluxes(
     two_stream_parameters: TwoStreamParameters = (
         compile_composite_two_stream_parameters(
             wavelengths_in_cm=model_wavelengths_in_cm,
-            crosssections=crosssection_catalog_dataset_interpolated_to_model,
+            crosssections=crosssection_catalog_interpolated_to_model,
             number_density=number_densities_by_layer,
             path_lengths=path_lengths_in_cm,
         )
@@ -206,7 +210,6 @@ def calculate_observed_fluxes(
 
 def calculate_observed_fluxes_via_two_stream(
     forward_model_inputs: xr.DataTree,
-    precalculated_crosssection_catalog: Optional[xr.Dataset] = None,
 ) -> xr.DataArray:
     temperatures_by_level: xr.DataArray = forward_model_inputs[
         "temperature_profile_by_level"
@@ -215,11 +218,10 @@ def calculate_observed_fluxes_via_two_stream(
     atmospheric_structure_by_layer: xr.DataArray = forward_model_inputs[
         "atmospheric_structure_by_layer"
     ]
+
     vertical_structure_by_layer: xr.DataArray = atmospheric_structure_by_layer[
         "vertical_structure"
     ]
-
-    pressures_by_layer: xr.DataArray = vertical_structure_by_layer.pressures_by_layer
 
     number_densities_by_layer: xr.DataArray = (
         atmospheric_structure_by_layer["gas_number_densities"]
@@ -227,33 +229,15 @@ def calculate_observed_fluxes_via_two_stream(
         .to_dataarray(dim="species")
     )
 
-    if precalculated_crosssection_catalog is None:
-        temperatures_by_layer: xr.DataArray = (
-            vertical_structure_by_layer.temperatures_by_layer
-        )
+    crosssection_catalog: xr.Dataset = forward_model_inputs["reference_data"][
+        "crosssection_catalog"
+    ].to_dataset()
 
-        species_present_in_model: list[str] = number_densities_by_layer.species.values
-
-        crosssection_catalog_dataset_interpolated_to_model: xr.Dataset = (
-            curate_crosssection_catalog(
-                crosssection_catalog_dataset=forward_model_inputs["reference_data"][
-                    "crosssection_catalog"
-                ].to_dataset(),
-                temperatures_by_layer=temperatures_by_layer,
-                pressures_by_layer=pressures_by_layer,
-                species_present_in_model=species_present_in_model,
-            )
-        )
-
-    else:
-        crosssection_catalog_dataset_interpolated_to_model: xr.Dataset = convert_units(
-            precalculated_crosssection_catalog,
-            {"wavelength": "cm", "pressure": "barye"},
-        )
-
-    model_wavelengths_in_cm: xr.DataArray = (
-        crosssection_catalog_dataset_interpolated_to_model.wavelength
+    crosssection_catalog_as_dataarray: xr.DataArray = crosssection_catalog.to_array(
+        dim="species", name="crosssections"
     )
+
+    model_wavelengths_in_cm: xr.DataArray = crosssection_catalog.wavelength
 
     thermal_intensities: xr.Dataset = compile_thermal_structure_for_forward_model(
         temperatures_by_level=temperatures_by_level,
@@ -266,7 +250,7 @@ def calculate_observed_fluxes_via_two_stream(
     two_stream_parameters: TwoStreamParameters = (
         compile_composite_two_stream_parameters(
             wavelengths_in_cm=model_wavelengths_in_cm,
-            crosssections=crosssection_catalog_dataset_interpolated_to_model,
+            crosssections=crosssection_catalog_as_dataarray,
             number_density=number_densities_by_layer,
             path_lengths=path_lengths_in_cm,
         )

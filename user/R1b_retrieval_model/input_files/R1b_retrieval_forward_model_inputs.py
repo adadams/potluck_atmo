@@ -26,16 +26,16 @@ potluck_directory: Path = user_directory.parent
 ################### FORWARD MODEL DATA ###################
 model_directory_label: str = "R1b_retrieval"
 
-precurated_crosssection_catalog_dataset_filepath: Path = (
+precurated_crosssection_catalog_filepath: Path = (
     input_files_directory / "R1b_retrieval_precurated_crosssection_catalog.nc"
 )
 
-# if file exists, set it as the crosssection_catalog_dataset
+# if file exists, set it as the crosssection_catalog
 try:
-    precurated_crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(
-        precurated_crosssection_catalog_dataset_filepath
+    precurated_crosssection_catalog: xr.Dataset = xr.open_dataset(
+        precurated_crosssection_catalog_filepath
     ).crosssections
-    crosssection_catalog_dataset: xr.Dataset = precurated_crosssection_catalog_dataset
+    crosssection_catalog: xr.Dataset = precurated_crosssection_catalog
 
 except FileNotFoundError:
     opacity_catalog: str = "wide"
@@ -45,7 +45,7 @@ except FileNotFoundError:
     opacity_data_directory: Path = opacities_directory / "gases"
 
     catalog_filepath: Path = opacity_data_directory / f"{opacity_catalog}.nc"
-    crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(catalog_filepath)
+    crosssection_catalog: xr.Dataset = xr.open_dataset(catalog_filepath)
 
 data_dataset_filepath: Path = current_directory / "T3B_APOLLO_truncated.nc"
 data_dataset: xr.Dataset = xr.open_dataset(data_dataset_filepath)
@@ -93,7 +93,7 @@ stellar_radius_in_cm_as_xarray: xr.DataArray = xr.DataArray(
 
 def build_forward_model(
     vertical_structure: xr.DataTree,
-    crosssection_catalog_dataset: xr.Dataset = crosssection_catalog_dataset,
+    crosssection_catalog: xr.Dataset = crosssection_catalog,
     output_wavelengths: xr.DataArray = reference_model_wavelengths,
     distance_to_system_in_cm: float = distance_to_system_in_cm,
     stellar_radius_in_cm: float = stellar_radius_in_cm,
@@ -135,7 +135,7 @@ def build_forward_model(
 
     return UserForwardModelInputs(
         vertical_inputs=vertical_structure,
-        crosssection_catalog=crosssection_catalog_dataset,
+        crosssection_catalog=crosssection_catalog,
         output_wavelengths=output_wavelengths,
         path_lengths_by_layer=path_lengths_by_layer,
         altitudes_by_layer=altitudes_by_layer,

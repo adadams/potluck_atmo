@@ -11,9 +11,9 @@ current_directory: Path = Path(__file__).parent
 test_model_inputs_filepath: Path = current_directory / "test_model_inputs.toml"
 
 with open(test_model_inputs_filepath, "rb") as file:
-    test_model_inputs: default_builders.FundamentalParameterInputs = (
+    test_model_inputs: default_builders.DefaultFundamentalParameterInputs = (
         msgspec.toml.decode(
-            file.read()  # , type=FundamentalParameterInputs
+            file.read()  # , type=DefaultFundamentalParameterInputs
         )
     )
 

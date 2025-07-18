@@ -4,7 +4,7 @@ import xarray as xr
 
 from material.mixing_ratios import MixingRatios, generate_uniform_mixing_ratios
 from model_builders.default_builders import (
-    FundamentalParameterInputs,
+    DefaultFundamentalParameterInputs,
     PressureProfile,
     build_default_fundamental_parameters,
     build_temperature_profile,
@@ -15,7 +15,7 @@ from user.input_structs import UserVerticalModelInputs
 
 
 def build_vertical_model_inputs(
-    fundamental_parameter_inputs: FundamentalParameterInputs,
+    fundamental_parameter_inputs: DefaultFundamentalParameterInputs,
     uniform_log_abundances: dict[str, float],
     temperature_model_inputs: TemperatureModelInputs,
     pressure_profile: PressureProfile,

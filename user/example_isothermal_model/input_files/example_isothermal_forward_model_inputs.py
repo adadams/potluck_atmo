@@ -26,7 +26,7 @@ opacity_catalog: str = "wide-jwst"
 opacity_data_directory: Path = Path("/Volumes/Orange") / "Opacities_0v10" / "gases"
 
 catalog_filepath: Path = opacity_data_directory / f"{opacity_catalog}.nc"
-crosssection_catalog_dataset: xr.Dataset = xr.open_dataset(catalog_filepath)
+crosssection_catalog: xr.Dataset = xr.open_dataset(catalog_filepath)
 
 reference_model_filepath: Path = model_directory / "reference_data_wavelengths.nc"
 reference_model: xr.Dataset = xr.open_dataset(reference_model_filepath)
@@ -83,7 +83,7 @@ altitudes_by_layer: xr.DataArray = altitudes_by_level_to_by_layer(altitudes_in_c
 
 user_forward_model_inputs: UserForwardModelInputs = UserForwardModelInputs(
     vertical_inputs=user_vertical_inputs,
-    crosssection_catalog=crosssection_catalog_dataset,
+    crosssection_catalog=crosssection_catalog,
     output_wavelengths=reference_model_wavelengths,
     path_lengths_by_layer=path_lengths_by_layer,
     altitudes_by_layer=altitudes_by_layer,
