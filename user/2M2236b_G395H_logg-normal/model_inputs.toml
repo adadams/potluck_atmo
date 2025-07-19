@@ -1,0 +1,55 @@
+[metadata]
+model_ID = "2M2236b_G395H_logg-normal"
+run_date = "N/A"
+
+[fundamental_parameters] # build_default_fundamental_parameters
+planet_radius = 7.776098627
+radius_units = "Earth_radii"
+log10_planet_gravity = 4.134
+gravity_units = "cm/s^2"
+
+[pressure_profile] # build_pressure_profile_from_log_pressures
+shallowest_log10_pressure = -4.0
+deepest_log10_pressure =    2.5
+units = "bar"
+number_of_levels = 71
+
+[temperature_profile] # build_temperature_profile -> generate_piette_model
+[temperature_profile.model_inputs] # build_temperature_profile -> generate_piette_model -> TemperatureBounds
+lower_temperature_bound = 75.0
+upper_temperature_bound = 3975.0
+
+[temperature_profile.model_parameters] # build_temperature_profile -> generate_piette_model -> PietteTemperatureModelParameters
+temperature_0p0001bar =         827.7387956
+temperature_0p001bar =          839.50718342
+temperature_0p01bar =           931.76992661
+temperature_0p1bar =            1054.28688291
+temperature_1bar =              1076.13800125
+photospheric_temperature_3bar = 1201.88865577
+temperature_10bar =             1271.62228422
+temperature_30bar =             1325.22796645
+temperature_100bar =            1490.81714941
+temperature_300bar =            2296.83506743
+
+[gas_chemistry] # build_uniform_gas_chemistry
+filler_species = "h2"
+
+[gas_chemistry.log_mixing_ratios]
+"h2o" =         -5.940043768
+"co" =          -5.695578981
+"co2" =         -8.884468544
+"ch4" =         -7.663836048
+"Lupu_alk" =    -4.953393893
+"h2s" =         -11.42842546
+"nh3" =         -10.1409949
+
+[observable_inputs]
+distance_to_system =  63.0
+distance_units = "parsec"
+stellar_radius =      0.22
+radius_units = "Solar_radii"
+
+[reference_data]
+# gas_opacity_catalog_filepath = "/media/gba8kj/Orange/Opacities_0v10/gases/jwst50k.nc"
+gas_opacity_catalog_filepath = "/Volumes/Orange/Opacities_0v10/gases/jwst50k.nc"
+reference_wavelength_filename = "/Users/arthur/Documents/Astronomy/code/potluck/user/2M2236b_G395H_logg-normal/reference_model_for_wavelengths.nc"

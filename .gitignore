@@ -1,51 +1,35 @@
 .DS_Store
-*.pyc
 syncthing*
 __pycache__
 
+*.pdf
+*.pyc
+*.h5
+*.nc
+!user/2M2236b_G395H_logg-normal/reference_model_for_wavelengths.nc
 
 experimental/
 
-material/clouds/*
-material/gases/reference_data/*.nc
+reference_data/*
 
 scratch_work/
 
 user/old_files_for_comparison/
-user/test_data_structures/
-user/test_2M2236b_G395H/
+user/old_style
+user/even_older_style
 
-check_xarray_files.py
-user/test_*
-*.pdf
-*.nc
-!user/R1a_retrieval_model/input_files/R1a_retrieval_precurated_crosssection_catalog.nc
-!user/R1a_retrieval_model/intermediate_outputs/*
-!user/R1a_retrieval_model/output_files/*
-!user/R1b_retrieval_model/input_files/R1b_retrieval_precurated_crosssection_catalog.nc
-!user/R1b_retrieval_model/intermediate_outputs/*
-!user/R1b_retrieval_model/output_files/*
-!user/R1c_retrieval_model/input_files/R1c_retrieval_precurated_crosssection_catalog.nc
-!user/R1c_retrieval_model/intermediate_outputs/*
-!user/R1c_retrieval_model/output_files/*
-!user/2M2236b_G395H_logg-normal_model/**/*.nc
-test_opacity_tables.py
-material/gases/reference_data/picaso_lupu_temperature_levels.py
-compare_nearly_isothermal_spectra.py
-compile_vertical_structure_for_Wills_model.py
-calculate_Wills_simplified_Ross458c_model.py
-calculate_test_2M2236b_model.py
-calculate_ATMO_model.py
-compare_isothermal_spectra.py
+potluck/material/clouds/*
+potluck/material/gases/reference_data/*.nc
 
-**/*nautilus.hdf5
-speed_test_numba_RT.py
-user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_MLE.nc
-user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_points.npy
-user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_results.nc
-user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_log_l.npy
-user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_log_w.npy
-user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_logg-normal_2025Jun15_19:50:01_log_z.npy
+potluck/check_xarray_files.py
+potluck/curate_pRT_molecular_crosssections.py
+potluck/compare_nearly_isothermal_spectra.py
+potluck/compile_vertical_structure_for_Wills_model.py
+potluck/calculate_Wills_simplified_Ross458c_model.py
+potluck/calculate_test_2M2236b_model.py
+potluck/calculate_ATMO_model.py
+potluck/compare_isothermal_spectra.py
+potluck/test_opacity_tables.py
+potluck/speed_test_numba_RT.py
+
 .gitignore
-user/2M2236b_G395H_logg-normal_model/output_files/2M2236b_G395H_loggnormal_retrieval_2025-06-15.log
-curate_pRT_molecular_crosssections.py
