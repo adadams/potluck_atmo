@@ -9,7 +9,10 @@ from jax import numpy as jnp
 from pint import UnitRegistry
 
 from potluck.basic_types import PositiveValue, PressureDimension
-from potluck.calculate_RT import calculate_observed_fluxes_via_two_stream
+from potluck.calculate_RT import (
+    calculate_observed_fluxes_via_two_stream,
+    calculate_observed_transmission_spectrum,
+)
 from potluck.compile_crosssection_data import curate_crosssection_catalog
 from potluck.constants_and_conversions import AMU_IN_GRAMS
 from potluck.density import calculate_mass_from_radius_and_surface_gravity
@@ -465,3 +468,30 @@ def calculate_emission_model(
     ).rename("resampled_emission_flux")
 
     return emission_fluxes_sampled_to_data
+
+
+def calculate_transmission_model(
+    forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
+) -> float:
+    transit_depths: xr.DataArray = calculate_observed_transmission_spectrum(
+        forward_model_inputs=forward_model_inputs
+    )
+
+    reference_model_wavelengths: xr.DataArray = forward_model_inputs[
+        "observable_parameters"
+    ].wavelength
+
+    transit_depths_sampled_to_data: xr.DataArray = (
+        resample_spectral_quantity_to_new_wavelengths(
+            reference_model_wavelengths,
+            transit_depths.wavelength,
+            transit_depths,
+            fwhm=resampling_fwhm_fraction
+            * (
+                reference_model_wavelengths.to_numpy()[-1]
+                - reference_model_wavelengths.to_numpy()[-2]
+            ),
+        )
+    ).rename("resampled_transmission_flux")
+
+    return transit_depths_sampled_to_data

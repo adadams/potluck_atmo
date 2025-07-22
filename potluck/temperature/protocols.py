@@ -14,6 +14,8 @@ class TemperatureModel(Protocol):
 
 TemperatureModelInputs: TypeAlias = msgspec.Struct
 TemperatureModelParameters: TypeAlias = msgspec.Struct
+TemperatureModelArguments: TypeAlias = msgspec.Struct
+TemperatureModelSamples: TypeAlias = msgspec.Struct
 
 
 class TemperatureModelConstructor(Protocol):

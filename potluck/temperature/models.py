@@ -1,8 +1,7 @@
 from collections.abc import Callable
 from functools import partial
-from typing import Tuple, TypeVar
+from typing import TypeVar
 
-import msgspec
 import numpy as np
 from msgspec.structs import astuple
 from numba import njit
@@ -15,18 +14,24 @@ from potluck.basic_types import (
     PositiveValue,
     TemperatureValue,
 )
-from potluck.temperature.protocols import TemperatureModel, TemperatureModelParameters
+from potluck.temperature.protocols import (
+    TemperatureModel,
+    TemperatureModelArguments,
+    TemperatureModelInputs,
+    TemperatureModelParameters,
+    TemperatureModelSamples,
+)
 
-NumberofNodes = TypeVar("NumberofNodes", bound=Tuple[int, ...])  # numpy ndarray shape
-NumberofModelPressures = TypeVar("NumberofModelPressures", bound=Tuple[int, ...])
+NumberofNodes = TypeVar("NumberofNodes", bound=tuple[int, ...])  # numpy ndarray shape
+NumberofModelPressures = TypeVar("NumberofModelPressures", bound=tuple[int, ...])
 
 
-class TemperatureBounds(msgspec.Struct):
+class TemperatureBounds(TemperatureModelInputs):
     lower_temperature_bound: TemperatureValue
     upper_temperature_bound: TemperatureValue
 
 
-class PietteTemperatureModelSamples(msgspec.Struct):
+class PietteTemperatureModelSamples(TemperatureModelSamples):
     photospheric_temperature_3bar: TemperatureValue
     scaled_temperature_1bar: NormalizedValue
     scaled_temperature_0p1bar: NormalizedValue
@@ -167,6 +172,11 @@ class PietteTemperatureModelParameters(TemperatureModelParameters):
     temperature_300bar: TemperatureValue
 
 
+class PietteTemperatureModelArguments(TemperatureModelArguments, kw_only=True):
+    model_inputs: TemperatureBounds
+    model_parameters: PietteTemperatureModelParameters
+
+
 def generate_piette_model(
     model_parameters: PietteTemperatureModelParameters,
 ) -> TemperatureModel:
@@ -245,3 +255,24 @@ def proper_piette_model(
         log_pressures=log_pressures,
         smoothing_parameter=0.3,
     )
+
+
+class IsothermalTemperatureModelParameters(TemperatureModelParameters):
+    temperature: TemperatureValue
+
+
+class IsothermalTemperatureModelArguments(TemperatureModelArguments, kw_only=True):
+    model_parameters: IsothermalTemperatureModelParameters
+
+
+def generate_isothermal_model(
+    model_parameters: IsothermalTemperatureModelParameters,
+) -> TemperatureModel:
+    return partial(isothermal_profile, temperature=model_parameters.temperature)
+
+
+def isothermal_profile(
+    log_pressures: np.ndarray[(NumberofModelPressures,), LogPressureValue],
+    temperature: TemperatureValue,
+) -> np.ndarray[(NumberofModelPressures,), TemperatureValue]:
+    return np.full_like(log_pressures, temperature)

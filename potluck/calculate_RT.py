@@ -35,60 +35,6 @@ current_directory: Path = Path(__file__).parent
 
 
 # TODO: update with datatree input approach
-def calculate_observed_transmission_spectrum(
-    user_forward_model_inputs: UserForwardModelInputs,
-    precalculated_crosssection_catalog: Optional[xr.Dataset] = None,
-) -> XarrayOutputs:
-    compiled_vertical_dataset: ForwardModelXarrayInputs = (
-        compile_vertical_structure_for_forward_model(
-            user_vertical_inputs=user_forward_model_inputs.vertical_inputs
-        )
-    )
-    vertical_structure_dataset_by_layer: xr.Dataset = compiled_vertical_dataset.by_layer
-
-    number_densities_by_layer: xr.DataArray = (
-        vertical_structure_dataset_by_layer.number_density
-    )
-
-    species_present_in_model: list[str] = number_densities_by_layer.species.values
-
-    if precalculated_crosssection_catalog is None:
-        crosssection_catalog_interpolated_to_model: xr.Dataset = (
-            curate_crosssection_catalog(
-                crosssection_catalog=user_forward_model_inputs.crosssection_catalog,
-                temperatures_by_layer=vertical_structure_dataset_by_layer.temperature,
-                pressures_by_layer=vertical_structure_dataset_by_layer.pressure,
-                species_present_in_model=species_present_in_model,
-            )
-        )
-    else:
-        crosssection_catalog_interpolated_to_model = precalculated_crosssection_catalog
-
-    absorption_coefficients: xr.Dataset = crosssections_to_attenuation_coefficients(
-        crosssection_catalog_interpolated_to_model,
-        vertical_structure_dataset_by_layer.number_density,
-    )
-
-    optical_depth: xr.DataArray = attenuation_coefficients_to_optical_depths(
-        absorption_coefficients,
-        user_forward_model_inputs.path_lengths_by_layer,
-    )
-
-    cumulative_optical_depth_by_layer: xr.DataArray = (
-        optical_depth.cumulative("pressure").sum().sum("species")
-    )
-
-    transmission_flux: xr.DataArray = calculate_transmission_spectrum(
-        cumulative_optical_depth_by_layer,
-        user_forward_model_inputs.path_lengths_by_layer,
-        user_forward_model_inputs.altitudes_by_layer,
-        user_forward_model_inputs.stellar_radius_in_cm,
-        user_forward_model_inputs.vertical_inputs.planet_radius_in_cm,
-    )
-    return transmission_flux
-
-
-# TODO: update with datatree input approach
 def calculate_observed_fluxes(
     user_forward_model_inputs: UserForwardModelInputs,
     precalculated_crosssection_catalog: Optional[xr.Dataset] = None,
@@ -210,6 +156,56 @@ def calculate_observed_fluxes(
         "observed_twostream_flux": observed_twostream_flux,
         "transmission_flux": transmission_flux,
     }
+
+
+def calculate_observed_transmission_spectrum(
+    forward_model_inputs: xr.DataTree,
+) -> XarrayOutputs:
+    atmospheric_structure_by_layer: xr.DataArray = forward_model_inputs[
+        "atmospheric_structure_by_layer"
+    ]
+
+    vertical_structure_by_layer: xr.DataArray = atmospheric_structure_by_layer[
+        "vertical_structure"
+    ]
+
+    path_lengths_in_cm: xr.DataArray = vertical_structure_by_layer.path_lengths
+
+    number_densities_by_layer: xr.DataArray = (
+        atmospheric_structure_by_layer["gas_number_densities"]
+        .to_dataset()
+        .to_dataarray(dim="species")
+    )
+
+    crosssection_catalog: xr.Dataset = forward_model_inputs["reference_data"][
+        "crosssection_catalog"
+    ].to_dataset()
+
+    crosssection_catalog_as_dataarray: xr.DataArray = crosssection_catalog.to_array(
+        dim="species", name="crosssections"
+    )
+
+    absorption_coefficients: xr.Dataset = crosssections_to_attenuation_coefficients(
+        crosssection_catalog_as_dataarray, number_densities_by_layer
+    )
+
+    optical_depth: xr.DataArray = attenuation_coefficients_to_optical_depths(
+        absorption_coefficients, path_lengths_in_cm
+    )
+
+    cumulative_optical_depth_by_layer: xr.DataArray = (
+        optical_depth.cumulative("pressure").sum().sum("species")
+    )
+
+    transmission_flux: xr.DataArray = calculate_transmission_spectrum(
+        cumulative_optical_depth_by_layer,
+        path_lengths_in_cm,
+        vertical_structure_by_layer.altitudes_by_layer,
+        forward_model_inputs["observable_parameters"].stellar_radius,
+        vertical_structure_by_layer.planet_radius,
+    )
+
+    return transmission_flux
 
 
 def calculate_observed_fluxes_via_two_stream(

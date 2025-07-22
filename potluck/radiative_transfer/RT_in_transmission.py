@@ -1,4 +1,6 @@
+import jax
 import numpy as np
+from jax import numpy as jnp
 
 from potluck.basic_types import PressureDimension, WavelengthDimension
 from potluck.xarray_functional_wrappers import Dimensionalize, set_result_name_and_units
@@ -15,6 +17,7 @@ from potluck.xarray_functional_wrappers import Dimensionalize, set_result_name_a
     ),
     result_dimensions=((WavelengthDimension,),),
 )
+@jax.jit
 def calculate_transmission_spectrum(
     cumulative_optical_depth: np.ndarray[np.float64],
     path_lengths: np.ndarray[np.float64],
@@ -22,16 +25,16 @@ def calculate_transmission_spectrum(
     stellar_radius_in_cm: float,
     planet_radius_in_cm: float,
 ) -> np.ndarray[np.float64]:
-    solid_planet_disk_area: float = np.pi * planet_radius_in_cm**2
-    solid_stellar_disk_area: float = np.pi * stellar_radius_in_cm**2
+    solid_planet_disk_area: float = jnp.pi * planet_radius_in_cm**2
+    solid_stellar_disk_area: float = jnp.pi * stellar_radius_in_cm**2
 
     planet_area_with_atmosphere: np.ndarray[np.float64] = (
         solid_planet_disk_area
-        + np.sum(
-            (1 - np.exp(-cumulative_optical_depth))
+        + jnp.sum(
+            (1 - jnp.exp(-cumulative_optical_depth))
             * path_lengths
             * 2
-            * np.pi
+            * jnp.pi
             * (planet_radius_in_cm + altitudes),
             axis=-1,
         )

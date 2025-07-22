@@ -1,0 +1,36 @@
+[metadata]
+model_ID = "RISOTTO_Planet0"
+run_date = "2025-07-22"
+
+[fundamental_parameters] # build_default_fundamental_parameters
+planet_radius = 7.9559e7
+radius_units = "meters"
+log10_planet_gravity = 3.3666 # 23.26 m/s^2
+gravity_units = "cm/s^2"
+
+[pressure_profile] # build_pressure_profile_from_log_pressures
+shallowest_log10_pressure = -6.0
+deepest_log10_pressure =    1.0
+units = "bar"
+number_of_levels = 36
+
+[temperature_profile.model_parameters] # build_temperature_profile -> generate_isothermal_model -> IsothermalTemperatureModelParameters
+temperature = 1500
+
+[gas_chemistry] # build_uniform_gas_chemistry
+filler_species = "h2he"
+
+[gas_chemistry.log_mixing_ratios] # 85% H2, 15% He by molecule count
+"h2o" =         -3.523 # 300 ppmv
+"co" =          -3.456 # 350 ppmv
+
+[observable_inputs]
+distance_to_system =  99.9999999
+distance_units = "parsec"
+stellar_radius =      5.43e8
+radius_units = "meters"
+
+[reference_data]
+gas_opacity_catalog_filepath = "/media/gba8kj/Orange/Opacities_0v10/gases/wide.nc"
+# gas_opacity_catalog_filepath = "/Volumes/Orange/Opacities_0v10/gases/wide.nc"
+reference_wavelength_filename = "/home/gba8kj/Documents/Astronomy/code/potluck/user/Planet0/Planet0_data.nc"

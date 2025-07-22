@@ -64,11 +64,14 @@ def convert_dataset_by_pressure_levels_to_pressure_layers(
     dataset: xr.Dataset, strict: bool = False
 ) -> xr.Dataset:
     if "pressure" not in dataset.coords:
+        return dataset
+        """
         if strict:
             raise ValueError("Dataset must have pressure as a coordinate.")
         else:
             print("Dataset does not have pressure as a coordinate.")
             return dataset
+        """
 
     variable_names: KeysView[str] = dataset.data_vars.keys()
 
