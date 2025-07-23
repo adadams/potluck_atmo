@@ -15,13 +15,16 @@ from potluck.basic_types import LogMixingRatioValue, PositiveValue, TemperatureV
 from potluck.model_builders.default_builders import (
     DefaultFundamentalParameterInputs,
     UniformGasChemistryInputs,
-    calculate_transmission_model,
 )
 from potluck.model_statistics.calculate_statistics import calculate_log_likelihood
 from potluck.model_statistics.error_inflation import inflate_errors_by_flux_scaling
 from potluck.temperature.models import IsothermalTemperatureModelArguments
 from potluck.xarray_functional_wrappers import convert_units
-from user.Planet0.build_model import ModelInputs, build_model_from_inputs
+from user.Planet0.build_model import (
+    ModelInputs,
+    build_model_from_inputs,
+    evaluate_transmission_spectrum,
+)
 
 current_directory: Path = Path(__file__).parent
 
@@ -88,7 +91,7 @@ def evaluate_log_likelihood_with_free_parameters(
         free_parameter_inputs
     )
 
-    free_parameter_transmission_model: xr.DataArray = calculate_transmission_model(
+    free_parameter_transmission_model: xr.DataArray = evaluate_transmission_spectrum(
         forward_model_inputs=free_parameter_forward_model,
         resampling_fwhm_fraction=resampling_fwhm_fraction,
     )

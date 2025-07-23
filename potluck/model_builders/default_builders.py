@@ -63,7 +63,7 @@ class DefaultFundamentalParameterInputs(msgspec.Struct):
     radius_units: str
     log10_planet_gravity: float
     gravity_units: str
-    additional_attributes: Optional[AttrsType] = None
+    additional_attributes: Optional[AttrsType] = msgspec.field(default_factory=dict)
 
 
 def build_default_fundamental_parameters(
@@ -112,7 +112,7 @@ class EvenlyLogSpacedPressureProfileInputs(msgspec.Struct):
     deepest_log10_pressure: float
     units: str
     number_of_levels: int
-    additional_attributes: Optional[AttrsType] = None
+    additional_attributes: Optional[AttrsType] = msgspec.field(default_factory=dict)
 
 
 def build_pressure_profile_from_log_pressures(
@@ -165,7 +165,7 @@ def build_pressure_profile_from_log_pressures(
 class UniformGasChemistryInputs(msgspec.Struct):
     log_mixing_ratios: UniformLogMixingRatios
     filler_species: Optional[str] = None
-    additional_attributes: Optional[AttrsType] = None
+    additional_attributes: Optional[AttrsType] = msgspec.field(default_factory=dict)
 
 
 def build_uniform_gas_chemistry(

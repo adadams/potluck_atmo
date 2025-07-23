@@ -102,6 +102,19 @@ def build_model_from_inputs(inputs_from_file: ModelInputs) -> xr.DataTree:
     return forward_model_structure
 
 
+def evaluate_transmission_spectrum(
+    inputs_from_toml_file: ModelInputs, resampling_fwhm_fraction: float
+):
+    forward_model: xr.DataTree = build_model_from_inputs(inputs_from_toml_file)
+
+    transmission_model_spectrum: xr.DataArray = calculate_transmission_model(
+        forward_model_inputs=forward_model,
+        resampling_fwhm_fraction=resampling_fwhm_fraction,
+    )
+
+    return transmission_model_spectrum
+
+
 if __name__ == "__main__":
     input_toml_filepath: Path = current_directory / "model_inputs.toml"
 
