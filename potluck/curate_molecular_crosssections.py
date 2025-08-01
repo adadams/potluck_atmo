@@ -1,3 +1,4 @@
+import sys
 from collections.abc import Mapping
 from glob import glob
 from pathlib import Path
@@ -7,8 +8,10 @@ import msgspec
 import numpy as np
 import xarray as xr
 
-from material.gases.sanity_checks import check_if_all_headers_match
-from spectrum.wavelength import (
+sys.path.append(str(Path(__file__).parent.parent))
+
+from potluck.material.gases.sanity_checks import check_if_all_headers_match
+from potluck.spectrum.wavelength import (
     get_number_of_wavelengths,
     get_wavelengths_from_number_of_elements_and_resolution,
 )
@@ -112,8 +115,9 @@ def load_crosssections_into_array(
 
 
 if __name__ == "__main__":
-    research_data_storage_directory: Path = Path("/Volumes/Orange")
-    # research_data_storage_directory: Path = Path("/home/Research")
+    # research_data_storage_directory: Path = Path("/Volumes/Orange")
+    # research_data_storage_directory: Path = Path("/media/gba8kj/Orange")
+    research_data_storage_directory: Path = Path("/home/Research")
 
     test_opacity_directory: Path = (
         research_data_storage_directory / "Opacities_0v10" / "gases"
@@ -122,7 +126,7 @@ if __name__ == "__main__":
     if not Path.exists(test_opacity_directory):
         raise ValueError(f"Directory {test_opacity_directory} does not exist.")
 
-    opacity_catalog_name: str = "wide"
+    opacity_catalog_name: str = "nirfs30k-2025"
 
     all_opacity_filepaths: dict[str, Path] = {
         filepath[filepath.rfind("/") + 1 : filepath.index(".")]: Path(filepath)
@@ -169,7 +173,7 @@ if __name__ == "__main__":
             fiducial_opacity_file_header.maximum_wavelength,
             fiducial_opacity_file_header.effective_resolution,
         )
-        + 1
+        # + 1
     )
     wavelengths: np.ndarray = get_wavelengths_from_number_of_elements_and_resolution(
         fiducial_opacity_file_header.minimum_wavelength,

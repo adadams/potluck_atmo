@@ -59,7 +59,7 @@ GasChemistryProfile: TypeAlias = xr.Dataset
 
 
 class DefaultFundamentalParameterInputs(msgspec.Struct):
-    planet_radius: float
+    planet_radius: PositiveValue
     radius_units: str
     log10_planet_gravity: float
     gravity_units: str
@@ -115,6 +115,7 @@ class EvenlyLogSpacedPressureProfileInputs(msgspec.Struct):
     additional_attributes: Optional[AttrsType] = msgspec.field(default_factory=dict)
 
 
+# @cache
 def build_pressure_profile_from_log_pressures(
     pressure_profile_inputs: EvenlyLogSpacedPressureProfileInputs,
 ) -> PressureProfile:
@@ -329,6 +330,7 @@ class DefaultObservableInputs(msgspec.Struct):
     radius_units: str
 
 
+# @cache
 def build_default_observable_inputs(
     observable_inputs: DefaultObservableInputs,
     output_wavelengths: xr.DataArray,
@@ -364,6 +366,51 @@ def build_default_observable_inputs(
     observable_input_dataset: xr.Dataset = (
         xr.merge(observable_input_dataarrays)
         .assign_coords(wavelength=xr.as_variable(output_wavelengths_in_cm))
+        .assign_attrs(**additional_attributes)
+    )
+
+    return observable_input_dataset
+
+
+# @cache
+def build_observable_inputs_by_spectral_groups(
+    observable_inputs: DefaultObservableInputs,
+    spectral_groups: xr.DataArray,
+    additional_attributes: Optional[AttrsType] = None,
+) -> xr.Dataset:
+    distance_to_system_in_cm_as_xarray: xr.DataArray = xr.DataArray(
+        data=observable_inputs.distance_to_system,
+        dims=set_dimensionless_quantity(),
+        attrs={"units": observable_inputs.distance_units},
+        name="distance_to_system",
+    )
+
+    stellar_radius_in_cm_as_xarray: xr.DataArray = xr.DataArray(
+        data=observable_inputs.stellar_radius,
+        dims=set_dimensionless_quantity(),
+        attrs={"units": observable_inputs.radius_units},
+        name="stellar_radius",
+    )
+
+    observable_input_dataarrays: tuple[XarrayStructure, ...] = (
+        convert_units(distance_to_system_in_cm_as_xarray, {"distance_to_system": "cm"}),
+        convert_units(stellar_radius_in_cm_as_xarray, {"stellar_radius": "cm"}),
+    )
+
+    spectral_groups_in_cm: xr.DataArray = convert_units(
+        spectral_groups, {"wavelength": "cm"}
+    )
+
+    additional_attributes: AttrsType = (
+        additional_attributes if additional_attributes is not None else {}
+    )
+
+    observable_input_dataset: xr.Dataset = (
+        xr.merge(observable_input_dataarrays)
+        .assign_coords(wavelength=xr.as_variable(spectral_groups_in_cm.wavelength))
+        .assign_coords(
+            spectral_group=xr.as_variable(spectral_groups_in_cm.spectral_group)
+        )
         .assign_attrs(**additional_attributes)
     )
 
@@ -465,6 +512,45 @@ def calculate_emission_model(
                 - reference_model_wavelengths.to_numpy()[-2]
             ),
         )
+    ).rename("resampled_emission_flux")
+
+    return emission_fluxes_sampled_to_data
+
+
+def calculate_emission_model_with_spectral_groups(
+    forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
+) -> float:
+    emission_fluxes = calculate_observed_fluxes_via_two_stream(
+        forward_model_inputs=forward_model_inputs
+    )
+
+    observable_parameters: xr.Dataset = forward_model_inputs[
+        "observable_parameters"
+    ].to_dataset()
+
+    reference_model_wavelengths: xr.DataArray = (
+        observable_parameters.wavelength.groupby("spectral_group")
+    )
+
+    def resample_spectrum_per_group(
+        spectral_group_wavelengths: xr.DataArray,
+        model_wavelengths: xr.DataArray = emission_fluxes.wavelength,
+        model_fluxes: xr.DataArray = emission_fluxes,
+        resampling_fwhm_fraction: float = resampling_fwhm_fraction,
+    ):
+        return resample_spectral_quantity_to_new_wavelengths(
+            spectral_group_wavelengths,
+            model_wavelengths,
+            model_fluxes,
+            fwhm=resampling_fwhm_fraction
+            * (
+                spectral_group_wavelengths.to_numpy()[-1]
+                - spectral_group_wavelengths.to_numpy()[-2]
+            ),
+        )
+
+    emission_fluxes_sampled_to_data: xr.DataArray = (
+        reference_model_wavelengths.map(resample_spectrum_per_group)
     ).rename("resampled_emission_flux")
 
     return emission_fluxes_sampled_to_data

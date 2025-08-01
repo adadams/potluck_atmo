@@ -93,3 +93,41 @@ def calculate_two_stream_scattering_components(
         forward_scattering_attentuation_coefficients,
         backward_scattering_attentuation_coefficients,
     )
+
+
+def calculate_rayleigh_scattering_crosssections_from_refractive_indices(
+    wavelengths_in_cm: float | np.ndarray[np.float64],
+    number_density: float | np.ndarray[np.float64],
+    refractive_indices: float | np.ndarray[np.float64],
+    King_correction_factor: float | np.ndarray[np.float64],
+) -> float | np.ndarray[np.float64]:
+    """
+    sigma(nu) = (24 pi^3 nu^4 / N^2) * ((n^2 - 1)/(n^2 + 2))^2 * F_k(nu)
+    where sigma(nu) is the Rayleigh scattering cross section,
+    n = n(nu) is the refractive index,
+    and F_k(nu) is the King correction factor which accounts for depolarization.
+    (From Thalman et. al. 2014, Equation 1)
+    """
+
+    frequencies: float | np.ndarray[np.float64] = C_IN_CGS / wavelengths_in_cm
+
+    return (
+        (24 * np.pi**3 * frequencies**4 / number_density**2)
+        * ((refractive_indices**2 - 1) / (refractive_indices**2 + 2)) ** 2
+        * King_correction_factor
+    )
+
+
+def calculate_H2_rayleigh_scattering_crosssections(
+    wavelengths_in_angstroms: float | np.ndarray[np.float64],
+) -> float | np.ndarray[np.float64]:
+    """
+    From Dalgarno & Williams (1962), Equation 3.
+    Neglects terms of order lambda^10.
+    """
+
+    return 8.14e-13 * wavelengths_in_angstroms ** (
+        -4
+    ) * 1.28e-6 * wavelengths_in_angstroms ** (
+        -6
+    ) + 1.61 * wavelengths_in_angstroms ** (-8)
