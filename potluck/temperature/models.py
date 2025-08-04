@@ -4,7 +4,8 @@ from typing import TypeVar
 
 import numpy as np
 from msgspec.structs import astuple
-from numba import njit
+
+# from numba import njit
 from scipy.interpolate import PchipInterpolator as monotonic_interpolation
 from scipy.ndimage import gaussian_filter1d as gaussian_smoothing
 
@@ -44,7 +45,7 @@ class PietteTemperatureModelSamples(TemperatureModelSamples):
     scaled_temperature_300bar: NormalizedValue
 
 
-@njit(cache=True)
+# @njit
 def create_monotonic_temperature_nodes_from_samples(
     photospheric_temperature_3bar: TemperatureValue,
     scaled_temperature_1bar: NormalizedValue,

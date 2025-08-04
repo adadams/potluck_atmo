@@ -103,7 +103,7 @@ def get_uniform_samples_from_monotonic_nodes(
         ]  # Update current_temp for next iteration
         remaining_upward_range = upper_bound - current_temp  # Update remaining range
 
-    return initial_temp_sample, proportions_down, proportions_up
+    return reference_temp, proportions_down, proportions_up
 
 
 # --- Main execution block for testing ---

@@ -7,16 +7,20 @@ def curate_crosssection_catalog(
     pressures_by_layer: xr.DataArray,
     species_present_in_model: list[str],
 ):
-    interpolated_crosssection_catalog: xr.Dataset = crosssection_catalog.interp(
-        pressure=pressures_by_layer, temperature=temperatures_by_layer, method="linear"
-    )
-
     # a "trick" to make sure the species are in the same order
-    interpolated_crosssection_catalog_with_model_species: xr.Dataset = (
-        interpolated_crosssection_catalog.get(species_present_in_model)
+    crosssection_catalog_with_model_species: xr.Dataset = crosssection_catalog.get(
+        species_present_in_model
     )
 
-    return interpolated_crosssection_catalog_with_model_species
+    interpolated_crosssection_catalog: xr.Dataset = (
+        crosssection_catalog_with_model_species.interp(
+            pressure=pressures_by_layer,
+            temperature=temperatures_by_layer,
+            method="linear",
+        )
+    )
+
+    return interpolated_crosssection_catalog
 
 
 def compile_crosssection_data_for_forward_model(
