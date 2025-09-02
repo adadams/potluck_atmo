@@ -150,13 +150,24 @@ def mixing_ratios_to_partial_pressures_by_species(
     )
 
 
-def mixing_ratios_to_number_densities_by_species(
-    mixing_ratios_by_level: np.ndarray[np.float64],
+def calculate_total_number_density(
     pressure_in_cgs: np.ndarray[np.float64],
     temperatures_in_K: np.ndarray[np.float64],
 ) -> np.ndarray[np.float64]:
     total_number_density: np.ndarray[np.float64] = pressure_in_cgs / (
         BOLTZMANN_CONSTANT_IN_CGS * temperatures_in_K
+    )
+
+    return total_number_density
+
+
+def mixing_ratios_to_number_densities_by_species(
+    mixing_ratios_by_level: np.ndarray[np.float64],
+    pressure_in_cgs: np.ndarray[np.float64],
+    temperatures_in_K: np.ndarray[np.float64],
+) -> np.ndarray[np.float64]:
+    total_number_density: np.ndarray[np.float64] = calculate_total_number_density(
+        pressure_in_cgs, temperatures_in_K
     )
 
     return mixing_ratios_by_level * total_number_density

@@ -3,9 +3,9 @@ from pathlib import Path
 from types import ModuleType
 
 import xarray as xr
-
-from compile_crosssection_data import curate_crosssection_catalog
+from compile_crosssection_data import curate_gas_crosssection_catalog
 from compile_vertical_structure import compile_vertical_structure_for_forward_model
+
 from user.input_structs import UserForwardModelInputs
 
 model_directory_label: str = "R1c_retrieval"
@@ -36,7 +36,7 @@ compiled_vertical_structure: xr.Dataset = compile_vertical_structure_for_forward
     default_forward_model_inputs.vertical_inputs
 ).by_layer
 
-precurated_crosssection_catalog: xr.Dataset = curate_crosssection_catalog(
+precurated_crosssection_catalog: xr.Dataset = curate_gas_crosssection_catalog(
     crosssection_catalog=default_forward_model_inputs.crosssection_catalog,
     temperatures_by_layer=compiled_vertical_structure.temperature,
     pressures_by_layer=compiled_vertical_structure.pressure,

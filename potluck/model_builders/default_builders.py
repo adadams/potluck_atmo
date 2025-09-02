@@ -8,16 +8,29 @@ import xarray as xr
 from jax import numpy as jnp
 from pint import UnitRegistry
 
-from potluck.basic_types import PositiveValue, PressureDimension
+from potluck.basic_types import (
+    LogMixingRatioValue,
+    NormalizedValue,
+    PositiveValue,
+    PressureDimension,
+)
 from potluck.calculate_RT import (
     calculate_observed_fluxes_via_two_stream,
     calculate_observed_transmission_spectrum,
 )
-from potluck.compile_crosssection_data import curate_crosssection_catalog
+from potluck.compile_crosssection_data import (
+    curate_cloud_crosssection_catalog,
+    curate_gas_crosssection_catalog,
+)
 from potluck.constants_and_conversions import AMU_IN_GRAMS
 from potluck.density import calculate_mass_from_radius_and_surface_gravity
+from potluck.material.clouds.cloud_metrics import (
+    calculate_cloud_mixing_ratios_by_layer,
+    convert_cloud_remaining_fraction_to_thickness,
+)
 from potluck.material.gases.molecular_metrics import (
     calculate_mean_molecular_weight,
+    calculate_total_number_density,
     mixing_ratios_to_number_densities,
 )
 from potluck.material.mixing_ratios import (
@@ -33,6 +46,7 @@ from potluck.temperature.protocols import (
 from potluck.vertical.altitude import (
     altitudes_by_level_to_path_lengths,
     calculate_altitude_profile,
+    convert_coordinate_by_level_to_by_layer,
     convert_datatree_by_pressure_levels_to_pressure_layers,
 )
 from potluck.xarray_functional_wrappers import (
@@ -56,6 +70,7 @@ FundamentalParameters: TypeAlias = xr.Dataset
 PressureProfile: TypeAlias = xr.Dataset
 TemperatureProfile: TypeAlias = xr.Dataset
 GasChemistryProfile: TypeAlias = xr.Dataset
+CloudChemistryProfile: TypeAlias = xr.Dataset
 
 
 class DefaultFundamentalParameterInputs(msgspec.Struct):
@@ -194,17 +209,126 @@ def build_uniform_gas_chemistry(
     mixing_ratios_by_level_as_xarray: xr.Dataset = xr.Dataset(
         data_vars={
             mixing_ratio_name: xr.DataArray(
-                data=uniform_mixing_ratios_by_level[mixing_ratio_name],
+                data=uniform_mixing_ratio_by_level,
                 dims=("pressure",),
                 attrs={"units": "mol/mol"},
             )
-            for mixing_ratio_name in uniform_mixing_ratios_by_level
+            for mixing_ratio_name, uniform_mixing_ratio_by_level in uniform_mixing_ratios_by_level.items()
         },
         coords=pressure_profile.coords,
         attrs=additional_attributes,
     )
 
     return mixing_ratios_by_level_as_xarray
+
+
+class SlabCloudSamples(msgspec.Struct):
+    uniform_log_mixing_ratio: LogMixingRatioValue
+    cloud_top_log10_pressure: float
+    cloud_thickness_relative_to_remaining_pressures: NormalizedValue
+    log10_mean_particle_radius: float
+    log10_particle_distribution_standard_deviation: float = 0.5
+
+
+def create_cloud_inputs_from_samples(
+    uniform_log_mixing_ratio: LogMixingRatioValue,
+    cloud_top_log10_pressure: float,
+    cloud_thickness_relative_to_remaining_pressures: NormalizedValue,
+    log10_mean_particle_radius: float,
+    log10_particle_distribution_standard_deviation: float,
+    maximum_log10_pressure: float,
+) -> msgspec.Struct:
+    cloud_log10_thickness: PositiveValue = (
+        convert_cloud_remaining_fraction_to_thickness(
+            cloud_top_log10_pressure=cloud_top_log10_pressure,
+            cloud_remaining_fraction=cloud_thickness_relative_to_remaining_pressures,
+            maximum_log10_pressure=maximum_log10_pressure,
+        )
+    )
+
+    return SlabCloudInputs(
+        uniform_log_mixing_ratio=uniform_log_mixing_ratio,
+        cloud_top_log10_pressure=cloud_top_log10_pressure,
+        cloud_log10_thickness=cloud_log10_thickness,
+        pressure_units="bar",
+        mean_particle_radius=10**log10_mean_particle_radius,
+        radius_units="cm",
+        log10_particle_distribution_standard_deviation=log10_particle_distribution_standard_deviation,
+    )
+
+
+class SlabCloudInputs(msgspec.Struct):
+    uniform_log_mixing_ratio: LogMixingRatioValue
+    cloud_top_log10_pressure: float
+    cloud_log10_thickness: float
+    pressure_units: str
+    mean_particle_radius: float
+    radius_units: str
+    log10_particle_distribution_standard_deviation: float = 0.5
+    additional_attributes: Optional[AttrsType] = msgspec.field(default_factory=dict)
+
+
+MultipleSlabCloudInputs: TypeAlias = dict[str, SlabCloudInputs]
+
+
+class Na2SSlabCloudInputs(msgspec.Struct):
+    crystalline_Na2S_Mie: SlabCloudInputs
+
+
+def build_uniform_slab_cloud_chemistry(
+    multiple_slab_cloud_inputs: MultipleSlabCloudInputs,
+    pressure_profile: PressureProfile,
+) -> CloudChemistryProfile:
+    multiple_slab_cloud_inputs_as_dict: dict[str, SlabCloudInputs] = (
+        (msgspec.structs.asdict(multiple_slab_cloud_inputs))
+        if isinstance(multiple_slab_cloud_inputs, msgspec.Struct)
+        else multiple_slab_cloud_inputs
+    )
+
+    cloud_mixing_ratios_by_layer: xr.Dataset = xr.Dataset(
+        data_vars={
+            cloud_species_name: xr.DataArray(
+                data=calculate_cloud_mixing_ratios_by_layer(
+                    log10_uniform_cloud_mixing_ratio=slab_cloud_inputs.uniform_log_mixing_ratio,
+                    cloud_top_log10_pressure=slab_cloud_inputs.cloud_top_log10_pressure,
+                    cloud_log10_thickness=slab_cloud_inputs.cloud_log10_thickness,
+                    log10_pressures_by_level=pressure_profile.log_pressures_by_level,
+                ),
+                dims=("pressure",),
+                attrs={
+                    "units": "mol/mol",
+                    "mean_particle_radius": slab_cloud_inputs.mean_particle_radius,
+                    "radius_units": slab_cloud_inputs.radius_units,
+                    "log10_particle_distribution_standard_deviation": slab_cloud_inputs.log10_particle_distribution_standard_deviation,
+                },
+            )
+            for cloud_species_name, slab_cloud_inputs in multiple_slab_cloud_inputs_as_dict.items()
+        },
+        coords={
+            "pressure": convert_coordinate_by_level_to_by_layer(
+                pressure_profile.pressure
+            )
+        },
+    )
+
+    return cloud_mixing_ratios_by_layer
+
+
+def renormalize_chemistry_profile_with_clouds(
+    gas_chemistry_profile: GasChemistryProfile,
+    cloud_chemistry_profile: CloudChemistryProfile,
+    total_number_densities_by_layer: xr.DataArray,
+) -> GasChemistryProfile:
+    renormalization_factor: float = 1 - (
+        cloud_chemistry_profile.to_dataarray(dim="species").sum(dim="species")
+        / total_number_densities_by_layer
+    )
+
+    renormalized_gas_chemistry_profile: GasChemistryProfile = (
+        gas_chemistry_profile / renormalization_factor
+    )
+
+    return renormalized_gas_chemistry_profile
 
 
 def build_temperature_profile(
@@ -312,6 +436,140 @@ def compile_vertical_structure(
 
     path_lengths_by_layer_in_cm: xr.DataArray = altitudes_by_level_to_path_lengths(
         altitudes_by_level_in_cm
+    )
+
+    atmospheric_structure_by_layer["vertical_structure"] = (
+        atmospheric_structure_by_layer["vertical_structure"].assign(
+            {"path_lengths": path_lengths_by_layer_in_cm}
+        )
+    )
+
+    return atmospheric_structure_by_layer
+
+
+def compile_vertical_structure_with_clouds(
+    fundamental_parameters: xr.Dataset,
+    pressure_profile: xr.Dataset,
+    temperature_profile: xr.DataArray,
+    gas_chemistry: xr.Dataset,
+    cloud_chemistry: xr.Dataset,
+    additional_attributes: Optional[AttrsType] = None,
+) -> xr.DataTree:
+    planet_mass_in_g: float = calculate_mass_from_radius_and_surface_gravity(
+        fundamental_parameters.planet_radius,  # assumed to be pre-processed into cgs
+        fundamental_parameters.planet_gravity,  # assumed to be pre-processed into cgs
+    )
+
+    mean_molecular_weight_in_g: float = (
+        calculate_mean_molecular_weight(gas_chemistry) * AMU_IN_GRAMS
+    )
+
+    altitudes_by_level_in_cm: xr.DataArray = calculate_altitude_profile(
+        pressure_profile.log_pressures_by_level,
+        temperature_profile,
+        mean_molecular_weight_in_g,
+        fundamental_parameters.planet_radius,
+        planet_mass_in_g,
+    ).assign_coords(pressure=pressure_profile.pressure)
+
+    additional_attributes: AttrsType = (
+        additional_attributes if additional_attributes is not None else {}
+    )
+
+    vertical_structure_by_level: xr.Dataset = xr.Dataset(
+        data_vars={
+            "planet_radius": fundamental_parameters.planet_radius,
+            "planet_gravity": fundamental_parameters.planet_gravity,
+            "pressures_by_level": pressure_profile.pressure,
+            "log_pressures_by_level": pressure_profile.log_pressures_by_level,
+            "temperatures_by_level": temperature_profile,
+            "altitudes_by_level": altitudes_by_level_in_cm,
+        },
+        coords={
+            "pressure": pressure_profile.pressure,
+        },
+        attrs=additional_attributes,
+    )
+    vertical_structure_by_level_node: xr.DataTree = xr.DataTree(
+        name="vertical_structure", dataset=vertical_structure_by_level
+    )
+
+    gas_number_densities_by_level: xr.Dataset = xr.Dataset(
+        data_vars={
+            species: xr.DataArray(
+                data=number_density_array, coords=pressure_profile.coords
+            )
+            for species, number_density_array in mixing_ratios_to_number_densities(
+                mixing_ratios_by_level=gas_chemistry,
+                pressure_in_cgs=pressure_profile.pressure,  #  * BAR_TO_BARYE,
+                temperatures_in_K=temperature_profile,
+            ).items()
+        },
+        coords={"pressure": pressure_profile.pressure},
+        attrs={
+            "units": "cm^-3",
+            **additional_attributes,
+        },
+    )
+    gas_number_densities_by_level_node: xr.DataTree = xr.DataTree(
+        name="gas_number_densities", dataset=gas_number_densities_by_level
+    )
+
+    atmospheric_structure_by_level: xr.DataTree = xr.DataTree(
+        name="atmospheric_structure",
+        children={
+            "vertical_structure": vertical_structure_by_level_node,
+            "gas_number_densities": gas_number_densities_by_level_node,
+        },
+    )
+
+    atmospheric_structure_by_layer: xr.DataTree = (
+        convert_datatree_by_pressure_levels_to_pressure_layers(
+            atmospheric_structure_by_level
+        )
+    )
+
+    path_lengths_by_layer_in_cm: xr.DataArray = altitudes_by_level_to_path_lengths(
+        altitudes_by_level_in_cm
+    )
+
+    total_number_densities_by_layer: xr.Dataset = calculate_total_number_density(
+        pressure_in_cgs=atmospheric_structure_by_layer[
+            "vertical_structure"
+        ].pressures_by_layer,
+        temperatures_in_K=atmospheric_structure_by_layer[
+            "vertical_structure"
+        ].temperatures_by_layer,
+    )
+
+    cloud_number_densities_by_layer: xr.Dataset = (
+        total_number_densities_by_layer * cloud_chemistry
+    )
+
+    for cloud_species in cloud_number_densities_by_layer.data_vars.keys():
+        cloud_number_densities_by_layer[cloud_species].attrs = cloud_chemistry[
+            cloud_species
+        ].attrs
+        cloud_number_densities_by_layer[cloud_species].attrs["units"] = "cm^-3"
+
+    cloud_number_densities_by_layer_node: xr.DataTree = xr.DataTree(
+        name="cloud_number_densities", dataset=cloud_number_densities_by_layer
+    )
+
+    atmospheric_structure_by_layer["cloud_number_densities"] = (
+        cloud_number_densities_by_layer_node
+    )
+
+    atmospheric_structure_by_layer["gas_number_densities"] = (
+        renormalize_chemistry_profile_with_clouds(
+            atmospheric_structure_by_layer["gas_number_densities"].to_dataset(),
+            cloud_number_densities_by_layer,
+            total_number_densities_by_layer,
+        )
+    )
+
+    atmospheric_structure_by_layer: xr.DataTree = atmospheric_structure_by_layer.assign(
+        {"cloud_number_densities": cloud_number_densities_by_layer_node}
     )
 
     atmospheric_structure_by_layer["vertical_structure"] = (
@@ -454,7 +712,7 @@ def build_forward_model(
         )
 
         crosssection_catalog_interpolated_to_model: xr.Dataset = (
-            curate_crosssection_catalog(
+            curate_gas_crosssection_catalog(
                 crosssection_catalog=crosssection_catalog_with_wavelengths_in_cm,
                 temperatures_by_layer=temperatures_by_layer,
                 pressures_by_layer=pressures_by_layer,
@@ -469,7 +727,90 @@ def build_forward_model(
 
     reference_data_node: xr.DataTree = xr.DataTree(
         name="reference_data",
-        children={"crosssection_catalog": crosssection_catalog_node},
+        children={"gas_crosssection_catalog": crosssection_catalog_node},
+    )
+
+    temperature_profile_node: xr.DataTree = xr.DataTree(
+        name="temperature_profile_by_level",
+        dataset=temperature_profile.to_dataset(name="temperature"),
+    )
+
+    atmospheric_model: xr.DataTree = xr.DataTree(
+        name="atmospheric_model",
+        children={
+            "atmospheric_structure_by_layer": atmospheric_structure_by_layer,
+            "temperature_profile_by_level": temperature_profile_node,
+            "observable_parameters": observable_parameter_node,
+            "reference_data": reference_data_node,
+        },
+    )
+
+    return atmospheric_model
+
+
+def build_forward_model_with_clouds(
+    atmospheric_structure_by_layer: xr.DataTree,
+    temperature_profile: xr.DataArray,
+    gas_crosssection_catalog: xr.Dataset,
+    cloud_crosssection_catalog: xr.DataTree,
+    observable_inputs: xr.Dataset,
+) -> xr.DataTree:
+    observable_parameter_node: xr.DataTree = xr.DataTree(
+        name="observable_parameters", dataset=observable_inputs
+    )
+
+    pressures_by_layer: xr.DataArray = (
+        atmospheric_structure_by_layer.vertical_structure.pressures_by_layer
+    )
+
+    temperatures_by_layer: xr.DataArray = (
+        atmospheric_structure_by_layer.vertical_structure.temperatures_by_layer
+    )
+
+    gas_species_present_in_model: Iterable[str] = (
+        atmospheric_structure_by_layer.gas_number_densities.data_vars.keys()
+    )
+
+    gas_crosssection_catalog_with_wavelengths_in_cm = convert_units(
+        gas_crosssection_catalog, {"wavelength": "cm", "pressure": "barye"}
+    )
+
+    gas_crosssection_catalog_interpolated_to_model: xr.Dataset = (
+        curate_gas_crosssection_catalog(
+            crosssection_catalog=gas_crosssection_catalog_with_wavelengths_in_cm,
+            temperatures_by_layer=temperatures_by_layer,
+            pressures_by_layer=pressures_by_layer,
+            species_present_in_model=gas_species_present_in_model,
+        )
+    )
+
+    cloud_species_present_in_model: Iterable[str] = (
+        atmospheric_structure_by_layer.cloud_number_densities.data_vars.keys()
+    )
+
+    for cloud_species in cloud_species_present_in_model:
+        cloud_crosssection_catalog[cloud_species] = cloud_crosssection_catalog[
+            cloud_species
+        ].map_over_datasets(convert_units, {"wavelength": "cm"})
+
+    cloud_crosssection_catalog_interpolated_to_model: xr.Dataset = (
+        curate_cloud_crosssection_catalog(
+            crosssection_catalog=cloud_crosssection_catalog,
+            species_present_in_model=cloud_species_present_in_model,
+        )
+    )
+
+    gas_crosssection_catalog_node: xr.DataTree = xr.DataTree(
+        name="gas_crosssection_catalog",
+        dataset=gas_crosssection_catalog_interpolated_to_model,
+    )
+
+    reference_data_node: xr.DataTree = xr.DataTree(
+        name="reference_data",
+        children={
+            "gas_crosssection_catalog": gas_crosssection_catalog_node,
+            "cloud_crosssection_catalog": cloud_crosssection_catalog_interpolated_to_model,
+        },
     )
 
     temperature_profile_node: xr.DataTree = xr.DataTree(
@@ -521,7 +862,8 @@ def calculate_emission_model_with_spectral_groups(
     forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
 ) -> float:
     emission_fluxes = calculate_observed_fluxes_via_two_stream(
-        forward_model_inputs=forward_model_inputs
+        forward_model_inputs=forward_model_inputs,
+        calculate_using_only_gas_opacities=False,
     )
 
     observable_parameters: xr.Dataset = forward_model_inputs[

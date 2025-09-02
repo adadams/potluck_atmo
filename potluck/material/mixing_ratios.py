@@ -58,3 +58,47 @@ def generate_uniform_mixing_ratios(
         ),
         number_of_pressure_levels=number_of_pressure_levels,
     )
+
+
+def calculate_uniform_mixing_ratios_in_slab_single_layer(
+    slab_top_level_fractional_index: float,
+    slab_bottom_level_fractional_index: float,
+    uniform_mixing_ratio: float,
+    number_of_pressure_layers: int,
+) -> np.ndarray[np.float64]:
+    slab_level_index: int = int(slab_top_level_fractional_index)
+
+    slab_mixing_ratio_fraction: np.ndarray = np.zeros(number_of_pressure_layers)
+
+    slab_mixing_ratio_fraction[slab_level_index] = (
+        slab_bottom_level_fractional_index - slab_top_level_fractional_index
+    )
+
+    return uniform_mixing_ratio * slab_mixing_ratio_fraction
+
+
+def calculate_uniform_mixing_ratios_in_slab_multi_layer(
+    slab_top_level_fractional_index: float,
+    slab_top_level_index: int,
+    slab_bottom_level_fractional_index: float,
+    slab_bottom_level_index: int,
+    uniform_mixing_ratio: float,
+    number_of_pressure_layers: int,
+) -> np.ndarray[np.float64]:
+    slab_top_layer_filling_fraction: float = (
+        slab_top_level_index + 1
+    ) - slab_top_level_fractional_index
+    slab_bottom_layer_filling_fraction: float = (
+        slab_bottom_level_fractional_index - slab_bottom_level_index
+    )
+
+    return (
+        uniform_mixing_ratio
+        * np.r_[
+            np.zeros(slab_top_level_index),
+            slab_top_layer_filling_fraction,
+            np.ones(slab_bottom_level_index - slab_top_level_index - 1),
+            slab_bottom_layer_filling_fraction,
+            np.zeros(number_of_pressure_layers - slab_bottom_level_index - 1),
+        ]
+    )

@@ -1,10 +1,14 @@
-from dataclasses import dataclass
+from collections.abc import Iterable
+from typing import TypeAlias
 
 import xarray as xr
 
 from potluck.material.absorbing.from_crosssections import (
     attenuation_coefficients_to_optical_depths,
     crosssections_to_attenuation_coefficients,
+)
+from potluck.material.clouds.cloud_metrics import (
+    compute_cloud_log_normal_particle_distribution_opacities,
 )
 from potluck.material.scattering.rayleigh import (
     calculate_two_stream_scattering_components,
@@ -15,20 +19,21 @@ from potluck.material.scattering.two_stream import (
 from potluck.material.scattering.types import TwoStreamScatteringCoefficients
 from potluck.material.types import TwoStreamParameters, TwoStreamScatteringParameters
 
+# @dataclass
+# class TwoStreamInputs:
+#    forward_scattering_coefficients: xr.DataArray
+#    backward_scattering_coefficients: xr.DataArray
+#    absorption_coefficients: xr.DataArray
+#    # path_length: xr.DataArray
 
-@dataclass
-class TwoStreamInputs:
-    forward_scattering_coefficients: xr.DataArray
-    backward_scattering_coefficients: xr.DataArray
-    absorption_coefficients: xr.DataArray
-    # path_length: xr.DataArray
+TwoStreamInputs: TypeAlias = xr.Dataset
 
 
 def compile_two_stream_parameters(
     forward_scattering_coefficients: xr.DataArray,
     backward_scattering_coefficients: xr.DataArray,
     absorption_coefficients: xr.DataArray,
-    path_length: xr.DataArray,
+    path_lengths: xr.DataArray,
 ) -> TwoStreamParameters:
     two_stream_scattering_parameters: TwoStreamScatteringParameters = (
         TwoStreamScatteringParameters(
@@ -41,7 +46,7 @@ def compile_two_stream_parameters(
     )
 
     optical_depth: xr.DataArray = attenuation_coefficients_to_optical_depths(
-        absorption_coefficients, path_length
+        absorption_coefficients, path_lengths
     )
 
     return TwoStreamParameters(
@@ -51,12 +56,11 @@ def compile_two_stream_parameters(
     )
 
 
-def compile_composite_two_stream_parameters(
+def compile_gas_two_stream_inputs(
     wavelengths_in_cm: xr.DataArray,  # (wavelength,)
     crosssections: xr.DataArray,  # (species, wavelength, pressure)
     number_density: xr.DataArray,  # (species, pressure)
-    path_lengths: xr.DataArray,  # (pressure,)
-) -> TwoStreamParameters:
+) -> xr.Dataset:
     scattering_coefficients: TwoStreamScatteringCoefficients = (
         calculate_two_stream_scattering_components(
             wavelengths_in_cm, crosssections, number_density
@@ -70,24 +74,139 @@ def compile_composite_two_stream_parameters(
     (
         cumulative_forward_scattering_coefficients,
         cumulative_backward_scattering_coefficients,
-    ) = TwoStreamScatteringCoefficients(
-        forward_scattering_coefficients=scattering_coefficients.forward_scattering_coefficients.sum(
-            "species"
-        ),
-        backward_scattering_coefficients=scattering_coefficients.backward_scattering_coefficients.sum(
-            "species"
-        ),
+    ) = (
+        scattering_coefficients.forward_scattering_coefficients.sum("species"),
+        scattering_coefficients.backward_scattering_coefficients.sum("species"),
     )
 
     cumulative_absorption_coefficients: xr.DataArray = (
         absorption_coefficients.sum("species")
-        + cumulative_forward_scattering_coefficients
-        + cumulative_backward_scattering_coefficients
+        # + cumulative_forward_scattering_coefficients
+        # + cumulative_backward_scattering_coefficients
+    )
+
+    return xr.Dataset(
+        {
+            "forward_scattering_coefficients": cumulative_forward_scattering_coefficients,
+            "backward_scattering_coefficients": cumulative_backward_scattering_coefficients,
+            "absorption_coefficients": cumulative_absorption_coefficients,
+        }
+    )
+
+
+def compile_composite_two_stream_parameters_with_gas_only(
+    wavelengths_in_cm: xr.DataArray,  # (wavelength,)
+    crosssections: xr.DataArray,  # (species, wavelength, pressure)
+    number_density: xr.DataArray,  # (species, pressure)
+    path_lengths: xr.DataArray,  # (pressure,)
+) -> TwoStreamParameters:
+    two_stream_inputs: xr.Dataset = compile_gas_two_stream_inputs(
+        wavelengths_in_cm, crosssections, number_density
     )
 
     return compile_two_stream_parameters(
-        forward_scattering_coefficients=cumulative_forward_scattering_coefficients,
-        backward_scattering_coefficients=cumulative_backward_scattering_coefficients,
-        absorption_coefficients=cumulative_absorption_coefficients,
-        path_length=path_lengths,
+        forward_scattering_coefficients=two_stream_inputs.forward_scattering_coefficients,
+        backward_scattering_coefficients=two_stream_inputs.backward_scattering_coefficients,
+        absorption_coefficients=two_stream_inputs.absorption_coefficients,
+        path_lengths=path_lengths,
+    )
+
+
+def compile_composite_two_stream_parameters_with_gas_and_clouds(
+    wavelengths_in_cm: xr.DataArray,  # (wavelength,)
+    gas_crosssections: xr.DataArray,  # (species, wavelength, pressure)
+    gas_number_density: xr.DataArray,  # (species, pressure)
+    cloud_crosssections: xr.DataTree,
+    cloud_number_densities: xr.Dataset,
+    path_lengths: xr.DataArray,  # (pressure,)
+) -> TwoStreamParameters:
+    gas_two_stream_inputs: xr.Dataset = compile_gas_two_stream_inputs(
+        wavelengths_in_cm, gas_crosssections, gas_number_density
+    )
+
+    for cloud_species in cloud_crosssections.children:
+        cloud_crosssections_for_species: xr.DataArray = cloud_crosssections[
+            cloud_species
+        ]
+
+        cloud_number_densities_for_species: xr.DataArray = cloud_number_densities[
+            cloud_species
+        ]
+
+        (
+            cloud_forward_scattering_coefficients,
+            cloud_backward_scattering_coefficients,
+            cloud_absorption_coefficients,
+        ) = compute_cloud_log_normal_particle_distribution_opacities(
+            cloud_particle_number_densities=cloud_number_densities_for_species.to_numpy(),
+            cloud_particles_densities=cloud_crosssections_for_species.cloud_material_density.item(),
+            cloud_particles_mean_radii=cloud_number_densities_for_species.attrs[
+                "mean_particle_radius"
+            ],
+            log_cloud_particles_distribution_std=cloud_number_densities_for_species.attrs[
+                "log10_particle_distribution_standard_deviation"
+            ],
+            cloud_particles_radii_bin_widths=cloud_crosssections_for_species.particle_radius_bin_widths.to_numpy(),
+            cloud_particles_radii=cloud_crosssections_for_species.particle_radius.to_numpy(),
+            clouds_absorption_opacities=cloud_crosssections_for_species.cloud_absorption_opacities.to_numpy(),
+            clouds_scattering_opacities=cloud_crosssections_for_species.cloud_scattering_opacities.to_numpy(),
+            clouds_particles_asymmetry_parameters=cloud_crosssections_for_species.cloud_scattering_asymmetry_parameters.to_numpy(),
+        )
+
+        cloud_forward_scattering_dataarray: xr.DataArray = xr.DataArray(
+            name="forward_scattering_coefficients",
+            data=cloud_forward_scattering_coefficients,
+            dims=("pressure", "wavelength"),
+            coords={
+                "pressure": cloud_number_densities_for_species.pressure,
+                "wavelength": cloud_crosssections_for_species.wavelength,
+            },
+        ).interp(wavelength=wavelengths_in_cm)
+
+        cloud_backward_scattering_dataarray: xr.DataArray = xr.DataArray(
+            name="backward_scattering_coefficients",
+            data=cloud_backward_scattering_coefficients,
+            dims=("pressure", "wavelength"),
+            coords={
+                "pressure": cloud_number_densities_for_species.pressure,
+                "wavelength": cloud_crosssections_for_species.wavelength,
+            },
+        ).interp(wavelength=wavelengths_in_cm)
+
+        cloud_absorption_dataarray: xr.DataArray = xr.DataArray(
+            name="absorption_coefficients",
+            data=cloud_absorption_coefficients,
+            dims=("pressure", "wavelength"),
+            coords={
+                "pressure": cloud_number_densities_for_species.pressure,
+                "wavelength": cloud_crosssections_for_species.wavelength,
+            },
+        ).interp(wavelength=wavelengths_in_cm)
+
+        cloud_two_stream_inputs: xr.Dataset = xr.Dataset(
+            {
+                "forward_scattering_coefficients": cloud_forward_scattering_dataarray,
+                "backward_scattering_coefficients": cloud_backward_scattering_dataarray,
+                "absorption_coefficients": cloud_absorption_dataarray,
+            }
+        )
+
+    return compile_composite_two_stream_parameters(
+        [gas_two_stream_inputs, cloud_two_stream_inputs], path_lengths
+    )
+
+
+def compile_composite_two_stream_parameters(
+    two_stream_inputs: Iterable[TwoStreamInputs],
+    path_lengths: xr.DataArray,  # (pressure,)
+) -> TwoStreamParameters:
+    concatenated_two_stream_inputs: xr.Dataset = xr.concat(
+        two_stream_inputs, dim="source"
+    ).sum("source")
+
+    return compile_two_stream_parameters(
+        forward_scattering_coefficients=concatenated_two_stream_inputs.forward_scattering_coefficients,
+        backward_scattering_coefficients=concatenated_two_stream_inputs.backward_scattering_coefficients,
+        absorption_coefficients=concatenated_two_stream_inputs.absorption_coefficients,
+        path_lengths=path_lengths,
     )

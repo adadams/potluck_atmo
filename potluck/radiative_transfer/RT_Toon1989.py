@@ -1,14 +1,19 @@
 from dataclasses import dataclass, field
-from typing import Final
+from typing import Annotated, Final, TypeAlias
 
+import msgspec
 import numpy as np
 import xarray as xr
 
-from basic_functional_tools import interleave
-from basic_types import CosineAngleDimension, PressureDimension, WavelengthDimension
-from xarray_functional_wrappers import Dimensionalize, set_result_name_and_units
+from potluck.basic_functional_tools import interleave
+from potluck.basic_types import (
+    CosineAngleDimension,
+    PressureDimension,
+    WavelengthDimension,
+)
+from potluck.xarray_functional_wrappers import Dimensionalize, set_result_name_and_units
 
-MAXIMUM_EXP_FLOAT: Final[float] = 5.0
+MAXIMUM_OPTICAL_DEPTH: Final[float] = 100.0
 
 STREAM_COSINE_ANGLES: Final[np.ndarray[np.float64]] = np.array(
     [
@@ -55,6 +60,9 @@ top_layer: list[slice] = [slice(None), slice(0, 1)]
 upper_edges: list[slice] = [slice(None, None), slice(1, None)]
 lower_edges: list[slice] = [slice(None, None), slice(None, -1)]
 
+SingleScatteringAlbedoValue: TypeAlias = Annotated[float, msgspec.Meta(ge=0, lt=1)]
+AlphaValue: TypeAlias = Annotated[float, msgspec.Meta(gt=0, le=1)]
+
 
 ###############################################################################
 ############################ Main callable function. ##########################
@@ -98,6 +106,15 @@ def RT_Toon1989(
     stream_cosine_angles: np.ndarray[np.float64],
     stream_weights: np.ndarray[np.float64],
 ) -> np.ndarray[np.float64]:
+    print(
+        f"{np.min(scattering_asymmetry_parameter)=}, {np.max(scattering_asymmetry_parameter)=}"
+    )
+    print(f"{np.min(single_scattering_albedo)=}, {np.max(single_scattering_albedo)=}")
+    print(f"{np.min(thermal_intensity)=}, {np.max(thermal_intensity)=}")
+    print(f"{np.min(delta_thermal_intensity)=}, {np.max(delta_thermal_intensity)=}")
+    print(f"{np.max(delta_thermal_intensity/thermal_intensity)=}")
+    print(f"{np.min(optical_depth)=}, {np.max(optical_depth)=}")
+
     terms_for_DSolver = calculate_terms_for_DSolver(
         optical_depth,
         single_scattering_albedo,
@@ -131,7 +148,7 @@ class DsolverInputs:
     cpm1: np.ndarray[np.float64]
     cm: np.ndarray[np.float64]
     cmm1: np.ndarray[np.float64]
-    ep: np.ndarray[np.float64]
+    inverse_ep: np.ndarray[np.float64]
     btop: np.ndarray[np.float64]
     bottom: np.ndarray[np.float64]
     gama: np.ndarray[np.float64]
@@ -161,20 +178,34 @@ def calculate_terms_for_DSolver(
     alpha: np.ndarray[np.float64] = np.sqrt((1 - w0) / (1 - w0 * g))
     lamda: np.ndarray[np.float64] = alpha * (1 - w0 * g) / mu_1
     gama: np.ndarray[np.float64] = (1 - alpha) / (1 + alpha)
-    term: np.ndarray[np.float64] = 1 / 2 / (1 - w0 * g)
+    term: np.ndarray[np.float64] = 1 / (2 * (1 - w0 * g))
 
-    dti_x_term: np.ndarray[np.float64] = delta_thermal_intensity * term
-    dti_x_tau: np.ndarray[np.float64] = delta_thermal_intensity * tau
+    dti_by_tau_x_term: np.ndarray[np.float64] = delta_thermal_intensity / tau * term
 
-    cpm1: np.ndarray[np.float64] = thermal_intensity + dti_x_term
-    cp: np.ndarray[np.float64] = cpm1 + dti_x_tau
-    cmm1: np.ndarray[np.float64] = thermal_intensity - dti_x_term
-    cm: np.ndarray[np.float64] = cmm1 + dti_x_tau
+    prefactor: float = 2 * np.pi * mu_1
 
-    lamda_x_tau: np.ndarray[np.float64] = np.clip(
-        lamda * tau, a_min=None, a_max=MAXIMUM_EXP_FLOAT
-    )
-    ep: np.ndarray[np.float64] = np.exp(lamda_x_tau)
+    cpm1_without_prefactor: np.ndarray[np.float64] = (
+        thermal_intensity + dti_by_tau_x_term
+    )  # c_n at tau = 0, i.e. upper edge
+    cp_without_prefactor: np.ndarray[np.float64] = (
+        cpm1_without_prefactor + delta_thermal_intensity
+    )  # c_n at tau = tau_n, i.e. lower edge
+
+    cpm1: np.ndarray[np.float64] = cpm1_without_prefactor * prefactor
+    cp: np.ndarray[np.float64] = cp_without_prefactor * prefactor
+
+    cmm1_without_prefactor: np.ndarray[np.float64] = (
+        thermal_intensity - dti_by_tau_x_term
+    )  # c_n at tau = 0, i.e. upper edge
+    cm_without_prefactor: np.ndarray[np.float64] = (
+        cmm1_without_prefactor + delta_thermal_intensity
+    )  # c_n at tau = tau_n, i.e. lower edge
+
+    cmm1: np.ndarray[np.float64] = cmm1_without_prefactor * prefactor
+    cm: np.ndarray[np.float64] = cm_without_prefactor * prefactor
+
+    lamda_x_tau: np.ndarray[np.float64] = lamda * tau
+    inverse_ep: np.ndarray[np.float64] = np.exp(-lamda_x_tau)
 
     tautop: np.ndarray[np.float64] = tau[*top_layer]
     btop: np.ndarray[np.float64] = (
@@ -185,7 +216,7 @@ def calculate_terms_for_DSolver(
         + delta_thermal_intensity[*bottom_layer] * (mu_1 / tbfrac)
     )  # Equivalent to multiplying taulayer by tbfrac.
 
-    return cp, cpm1, cm, cmm1, ep, btop, bottom, gama
+    return cp, cpm1, cm, cmm1, inverse_ep, btop, bottom, gama
 
 
 @dataclass
@@ -201,7 +232,7 @@ def DSolver_subroutine(
     cpm1: np.ndarray[np.float64],
     cm: np.ndarray[np.float64],
     cmm1: np.ndarray[np.float64],
-    ep: np.ndarray[np.float64],
+    inverse_ep: np.ndarray[np.float64],
     btop: np.ndarray[np.float64],
     bottom: np.ndarray[np.float64],
     gama: np.ndarray[np.float64],
@@ -221,40 +252,47 @@ def DSolver_subroutine(
     However, these do not match their formulae.
     """
 
-    e1: np.ndarray[np.float64] = ep + gama / ep
-    e2: np.ndarray[np.float64] = ep - gama / ep
-    e3: np.ndarray[np.float64] = gama * ep + 1 / ep
-    e4: np.ndarray[np.float64] = gama * ep - 1 / ep
+    e1 = 1 + gama * inverse_ep
+    print(f"{np.min(e1)=}, {np.max(e1)=}")
+    e2 = 1 - gama * inverse_ep
+    print(f"{np.min(e2)=}, {np.max(e2)=}")
+    e3 = gama + inverse_ep
+    print(f"{np.min(e3)=}, {np.max(e3)=}")
+    e4 = gama - inverse_ep
+    print(f"{np.min(e4)=}, {np.max(e4)=}")
 
-    gama_top_layer: np.ndarray = gama[*top_layer]
-    af_top: np.ndarray = np.zeros_like(gama_top_layer)
-    bf_top: np.ndarray = gama_top_layer + 1
-    cf_top: np.ndarray = gama_top_layer - 1
+    e1_top_layer: np.ndarray = e1[*top_layer]
+    e2_top_layer: np.ndarray = e2[*top_layer]
+    af_top: np.ndarray = np.zeros_like(e1_top_layer)
+    bf_top: np.ndarray = e1_top_layer
+    cf_top: np.ndarray = -e2_top_layer
     df_top: np.ndarray = btop - cmm1[*top_layer]
 
-    # odd indices
-    odd_afs: np.ndarray = (e1[*upper_edges] + e3[*upper_edges]) * (
-        gama[*lower_edges] - 1
+    even_afs: np.ndarray = (
+        e2[*lower_edges] * e3[*lower_edges] - e4[*lower_edges] * e1[*lower_edges]
     )
-    odd_bfs: np.ndarray = (e2[*upper_edges] + e4[*upper_edges]) * (
-        gama[*lower_edges] - 1
+    even_bfs: np.ndarray = (
+        e1[*lower_edges] * e1[*upper_edges] - e3[*lower_edges] * e3[*upper_edges]
     )
-    odd_cfs: np.ndarray = 2 * (1 - gama[*lower_edges] ** 2)
-    odd_dfs: np.ndarray = (gama[*lower_edges] - 1) * (
-        (cpm1[*lower_edges] - cp[*upper_edges])
-        + (cmm1[*lower_edges] - cm[*upper_edges])
+    even_cfs: np.ndarray = (
+        e3[*lower_edges] * e4[*lower_edges] - e1[*upper_edges] * e2[*lower_edges]
     )
+    even_dfs: np.ndarray = e3[*lower_edges] * (
+        cpm1[*upper_edges] - cp[*lower_edges]
+    ) + e1[*lower_edges] * (cm[*upper_edges] - cmm1[*lower_edges])
 
-    # even indices -- NOTE: even and odd have been switched from the
-    # Fortran code and Toon et al. due to fencepost effects.
-    even_afs: np.ndarray = 2 * (1 - gama[*upper_edges] ** 2)
-    even_bfs: np.ndarray = (e1[*upper_edges] - e3[*upper_edges]) * (
-        gama[*lower_edges] + 1
+    odd_afs: np.ndarray = (
+        e2[*upper_edges] * e1[*lower_edges] - e3[*lower_edges] * e4[*upper_edges]
     )
-    even_cfs: np.ndarray = odd_afs
-    even_dfs: np.ndarray = e3[*upper_edges] * (
-        cpm1[*lower_edges] - cp[*upper_edges]
-    ) + e1[*upper_edges] * (cm[*upper_edges] - cmm1[*lower_edges])
+    odd_bfs: np.ndarray = (
+        e2[*lower_edges] * e2[*upper_edges] - e4[*lower_edges] * e4[*upper_edges]
+    )
+    odd_cfs: np.ndarray = (
+        e1[*upper_edges] * e4[*upper_edges] - e2[*upper_edges] * e3[*upper_edges]
+    )
+    odd_dfs: np.ndarray = e2[*upper_edges] * (
+        cpm1[*upper_edges] - cp[*lower_edges]
+    ) + e4[*upper_edges] * (cmm1[*upper_edges] - cm[*lower_edges])
 
     af_base: np.ndarray = e1[*bottom_layer] - rsf * e3[*bottom_layer]
     bf_base: np.ndarray = e2[*bottom_layer] - rsf * e4[*bottom_layer]
@@ -295,11 +333,12 @@ def DTRIDGL_subroutine(
     bf_base: np.ndarray[np.float64] = bfs[*bottom_layer]
     df_base: np.ndarray[np.float64] = dfs[*bottom_layer]
 
-    as_base: np.ndarray[np.float64] = af_base / bf_base
-    ds_base: np.ndarray[np.float64] = df_base / bf_base
+    as_base: np.ndarray[np.float64] = af_base / bf_base  # Toon 1989: Equation 45.1
+    ds_base: np.ndarray[np.float64] = df_base / bf_base  # Toon 1989: Equation 45.2
 
     as_terms: np.ndarray[np.float64] = np.empty_like(afs, dtype=np.float64)
     as_terms[*bottom_layer] = as_base
+
     ds_terms: np.ndarray[np.float64] = np.empty_like(afs, dtype=np.float64)
     ds_terms[*bottom_layer] = ds_base
 
@@ -307,12 +346,14 @@ def DTRIDGL_subroutine(
 
     for half_layer in reversed(range(twice_number_of_layers)):
         xx: np.ndarray[np.float64] = 1 / (
-            bfs[:, half_layer] - cfs[:, half_layer] * as_terms[:, half_layer]
-        )
-        as_terms[:, half_layer - 1] = afs[:, half_layer] * xx
+            bfs[:, half_layer - 1] - cfs[:, half_layer - 1] * as_terms[:, half_layer]
+        )  # Toon 1989: Equation 46.1
+        as_terms[:, half_layer - 1] = (
+            afs[:, half_layer - 1] * xx
+        )  # Toon 1989: Equation 46.2
         ds_terms[:, half_layer - 1] = (
-            dfs[:, half_layer] - cfs[:, half_layer] * ds_terms[:, half_layer]
-        ) * xx
+            dfs[:, half_layer - 1] - cfs[:, half_layer - 1] * ds_terms[:, half_layer]
+        ) * xx  # Toon 1989: Equation 46.3
 
     xki_terms: np.ndarray[np.float64] = np.empty_like(ds_terms)
     xki_terms[:, 0] = ds_terms[:, 0]
@@ -345,39 +386,27 @@ def calculate_flux(
 
     number_of_layers: int = np.shape(tau)[-1]
 
-    # NOTE: there was a line in the original C++ for loop (index n3):
-    # if(xk2[n3]!=0. && fabs(xk2[n3]/xk[2*n3] < 1.e-30)) xk2[n3] = 0.;
-    # but note xk was only initialized, so all xk would be zero at this step?
     even_xki_terms: np.ndarray[np.float64] = xki_terms[:, 0::2]
     odd_xki_terms: np.ndarray[np.float64] = xki_terms[:, 1::2]
+
     xk1_terms: np.ndarray[np.float64] = even_xki_terms + odd_xki_terms
     xk2_terms: np.ndarray[np.float64] = even_xki_terms - odd_xki_terms
 
     # These are calculated just as they are in the setup function.
     # My goal is to decouple the RT components as much as possible, which leads
     # to this bit of redundant calculation (there's probably a better way!).
-    alpha: np.ndarray[np.float64] = np.sqrt(
-        (1 - w0) / (1 - w0 * g)
-    )  # sqrt( (1.-w0[i][j])/(1.-w0[i][j]*asym[i][j]) )
-    lamda: np.ndarray[np.float64] = (
-        alpha * (1 - w0 * g) / mu_1
-    )  # alpha[j]*(1.-w0[i][j]*cosbar[j])/mu_1
-    lamda_x_tau: np.ndarray[np.float64] = np.clip(
-        lamda * tau, a_min=None, a_max=MAXIMUM_EXP_FLOAT
-    )
+    alpha: np.ndarray[np.float64] = np.sqrt((1 - w0) / (1 - w0 * g))
+    lamda: np.ndarray[np.float64] = alpha * (1 - w0 * g) / mu_1
+    gama: np.ndarray[np.float64] = (1 - alpha) / (1 + alpha)
+    lamda_x_tau: np.ndarray[np.float64] = lamda * tau
 
-    # These are the variables that are used to compute the flux.
-    # They are all functions of the e-coefficient and blackbody fluxes via the matrix solver.
-    gg_terms: np.ndarray[np.float64] = (
-        xk1_terms * 2 * np.pi * w0 * (1 + (g * alpha)) / (1 + alpha)
-    )
-    hh_terms: np.ndarray[np.float64] = (
-        xk2_terms * 2 * np.pi * w0 * (1 - (g * alpha)) / (1 + alpha)
-    )
+    term: np.ndarray[np.float64] = 1 / (2 * (1 - w0 * g))
 
-    blackbody_scattering_term: np.ndarray[np.float64] = delta_thermal_intensity * (
-        mu_1 * (w0 * g) / (1 - w0 * g)
-    )
+    gg_terms: np.ndarray[np.float64] = xk1_terms * (1 / mu_1 - lamda)
+    hh_terms: np.ndarray[np.float64] = xk2_terms * gama * (1 / mu_1 + lamda)
+
+    blackbody_scattering_term: np.ndarray[np.float64] = term - mu_1
+
     alpha1: np.ndarray[np.float64] = (
         2 * np.pi * (thermal_intensity + blackbody_scattering_term)
     )
@@ -390,13 +419,14 @@ def calculate_flux(
         stream_weights, axis=tuple(range(1, w0.ndim + 1))
     )
 
-    epp_terms: np.ndarray[np.float64] = np.exp(lamda_x_tau)
-    em1_terms: np.ndarray[np.float64] = np.exp(-lamda_x_tau)
-    em2_terms: np.ndarray[np.float64] = np.exp(-tau / stream_cosine_angles)
-    em3_terms: np.ndarray[np.float64] = em1_terms * em2_terms
+    log_em1_terms: np.ndarray[np.float64] = -lamda_x_tau
+    em1_terms: np.ndarray[np.float64] = np.exp(log_em1_terms)
+    log_em2_terms: np.ndarray[np.float64] = -tau / stream_cosine_angles
+    em2_terms: np.ndarray[np.float64] = np.exp(log_em2_terms)
+    em3_terms: np.ndarray[np.float64] = np.exp(log_em1_terms + log_em2_terms)
 
     delta_thermal_intensity_by_angle: np.ndarray[np.float64] = (
-        delta_thermal_intensity * stream_cosine_angles
+        delta_thermal_intensity * np.ones_like(stream_cosine_angles)
     )
 
     delta_thermal_intensity_by_angle_at_base: np.ndarray[np.float64] = (
@@ -420,21 +450,25 @@ def calculate_flux(
     stream_weights_by_layer: np.ndarray[np.float64] = stream_weights[..., 0]
 
     for layer in reversed(range(1, number_of_layers)):
-        fpt_terms[..., layer - 1] = (
-            fpt_terms[..., layer] * em2_terms[..., layer]
-            + gg_terms[..., layer]
+        term_1: np.ndarray[np.float64] = fpt_terms[..., layer] * em2_terms[..., layer]
+        term_2: np.ndarray[np.float64] = (
+            gg_terms[..., layer]
             / (lamda[..., layer] * stream_cosine_angles_by_layer - 1)
-            * (epp_terms[..., layer] * em2_terms[..., layer] - 1)
-            + hh_terms[..., layer]
+            * (em2_terms[..., layer] - em1_terms[..., layer])
+        )
+        term_3: np.ndarray[np.float64] = (
+            hh_terms[..., layer]
             / (lamda[..., layer] * stream_cosine_angles_by_layer + 1)
             * (1 - em3_terms[..., layer])
-            + alpha1[..., layer] * (1 - em2_terms[..., layer])
-            + alpha2[..., layer]
-            * (
-                stream_cosine_angles_by_layer * (em2_terms[..., layer] - 1)
-                + tau[..., layer]
-            )
         )
+        term_4: np.ndarray[np.float64] = alpha1[..., layer] * (
+            1 - em2_terms[..., layer]
+        ) + alpha2[..., layer] * (
+            stream_cosine_angles_by_layer
+            - em2_terms[..., layer] * (tau[..., layer] + stream_cosine_angles_by_layer)
+        )
+
+        fpt_terms[..., layer - 1] = term_1 + term_2 + term_3 + term_4
 
     fpt_at_top: np.ndarray[np.float64] = fpt_terms[..., 0]
 

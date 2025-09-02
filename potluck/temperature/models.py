@@ -4,8 +4,6 @@ from typing import TypeVar
 
 import numpy as np
 from msgspec.structs import astuple
-
-# from numba import njit
 from scipy.interpolate import PchipInterpolator as monotonic_interpolation
 from scipy.ndimage import gaussian_filter1d as gaussian_smoothing
 
@@ -90,7 +88,11 @@ def create_monotonic_temperature_nodes_from_samples(
     )
 
     temperatures: np.ndarray[(number_of_pressure_nodes,), TemperatureValue] = np.empty(
-        number_of_pressure_nodes, dtype=np.float64
+        (
+            number_of_pressure_nodes,
+            *np.shape(photospheric_temperature_3bar),
+        ),
+        dtype=np.float64,
     )
 
     # Back out the physical temperature at 3 bars, which is the fiducial photosphere,
@@ -104,15 +106,11 @@ def create_monotonic_temperature_nodes_from_samples(
 
     # Sample from the photospheric temperature to the top of the (model) atmosphere
     for i in range(photospheric_index - 1, -1, -1):
-        if remaining_shallower_range <= 0:
-            decrement: float = 0.0
-
-        else:
-            proportion: NormalizedValue = proportions_shallower[
-                photospheric_index - 1 - i
-            ]
-            decrement: TemperatureValue = proportion * remaining_shallower_range
-            remaining_shallower_range -= decrement
+        proportion: NormalizedValue = proportions_shallower[photospheric_index - 1 - i]
+        decrement: TemperatureValue = np.where(
+            remaining_shallower_range > 0, proportion * remaining_shallower_range, 0
+        )
+        remaining_shallower_range -= decrement
 
         temperatures[i] = current_temperature - decrement
 
@@ -125,15 +123,11 @@ def create_monotonic_temperature_nodes_from_samples(
     )
 
     for i in range(photospheric_index + 1, number_of_pressure_nodes):
-        if remaining_upward_range <= 0:
-            increment = 0.0
-
-        else:
-            proportion: NormalizedValue = proportions_deeper[
-                i - (photospheric_index + 1)
-            ]
-            increment: TemperatureValue = proportion * remaining_upward_range
-            remaining_upward_range -= increment
+        proportion: NormalizedValue = proportions_deeper[i - (photospheric_index + 1)]
+        increment: TemperatureValue = np.where(
+            remaining_upward_range > 0, proportion * remaining_upward_range, 0
+        )
+        remaining_upward_range -= increment
 
         temperatures[i] = current_temperature + increment
 

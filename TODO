@@ -1,21 +1,24 @@
 General data structures:
-  ☐ Writing down a general consistent pattern for how to decorate/dimensionalize/unitize functions. Some ideas:
+  ✔ Writing down a general consistent pattern for how to decorate/dimensionalize/unitize functions. Some ideas: @done(25-08-07 09:58)
     - Can we use type annotations to notate the sort of structure that should go in, without prescribing it as a "Dimensionalize" decorator does?
     - Saving intermediate outputs as xarray datasets to user folders. If the functions are doing this saving, they have to have some knowledge of these paths to save the files. Should they? Should this be a wrapper for saving xarray outputs?
 
 Input file formats:
-  ☐ Make the "*forward_model_inputs.py" less "active":
-    ☐ Write a script to generate a default version from template. Less Python code, more plaintext.
+  ✔ Make the "*forward_model_inputs.py" less "active": @done(25-08-07 09:58)
+    ✔ Write a script to generate a default version from template. Less Python code, more plaintext. @done(25-08-07 09:58)
 
 Xarray structures:
-  ☐ Unit handling, not just dimensionality handling!
+  ✔ Unit handling, not just dimensionality handling! @done(25-08-07 09:58)
   ☐ Some numpy functions will break the continuity of xarray apply_ufunc (for example, slicing), so we should think carefully about how our metadata could "recover" that information as well as possible.
-  ☐ Dimensionalize doesn't work (yet) with non-dimensionalized arguments, like floats. (In "apply_ufunc", you can use an empty string ("") to indicate a non-dimensional argument.) 
+  ✔ Dimensionalize doesn't work (yet) with non-dimensionalized arguments, like floats. (In "apply_ufunc", you can use an empty string ("") to indicate a non-dimensional argument.) @done(25-08-07 09:58)
 
 Test RT scheme:
   ✔ Changing the maximum exponential cutoff (MAXIMUM_EXP_FLOAT in RT_Toon1989.py) affects how the (seemingly wrong) spectrum looks. Increasing it to effectively no cutoff reduces the anomalous alkali spike (where it should be an absorption feature). Turning the exponent lower ends up reaching the no-Rayleigh case as a limit. Maybe there's some competing exponents at high values? @done(24-11-19 18:22)
   ✔ There might be a wavenumber/wavelength problem with the gas optical depths, or an array being reversed. @done(24-11-19 18:22)
-  ☐ We need to do a very stripped-back test of each RT scheme. Fully isothermal, H2-only atmosphere, compare with both APOLLO and PICASO.
+  ✔ We need to do a very stripped-back test of each RT scheme. Fully isothermal, H2-only atmosphere, compare with both APOLLO and PICASO. @done(25-08-07 09:58)
 
 Retrieval setup:
   ☐ 
+
+Retrieval results:
+  ☐ Write a template script to reverse the conversion from sampler parameters to free parameters, so we have the retrieved actual parameters.
