@@ -13,8 +13,6 @@ from potluck.basic_types import (
 )
 from potluck.xarray_functional_wrappers import Dimensionalize, set_result_name_and_units
 
-MAXIMUM_OPTICAL_DEPTH: Final[float] = 100.0
-
 STREAM_COSINE_ANGLES: Final[np.ndarray[np.float64]] = np.array(
     [
         0.0446339553,
@@ -408,9 +406,14 @@ def calculate_flux(
     blackbody_scattering_term: np.ndarray[np.float64] = term - mu_1
 
     alpha1: np.ndarray[np.float64] = (
-        2 * np.pi * (thermal_intensity + blackbody_scattering_term)
+        2
+        * np.pi
+        * (
+            thermal_intensity
+            + blackbody_scattering_term * delta_thermal_intensity / tau
+        )
     )
-    alpha2: np.ndarray[np.float64] = 2 * np.pi * delta_thermal_intensity
+    alpha2: np.ndarray[np.float64] = 2 * np.pi * delta_thermal_intensity / tau
 
     stream_cosine_angles: np.ndarray[np.float64] = np.expand_dims(
         stream_cosine_angles, axis=tuple(range(1, w0.ndim + 1))

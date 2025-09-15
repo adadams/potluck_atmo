@@ -16,8 +16,6 @@ from potluck.xarray_functional_wrappers import Dimensionalize, set_result_name_a
 
 jax.config.update("jax_enable_x64", True)
 
-MAXIMUM_OPTICAL_DEPTH: Final[float] = 50.0
-
 STREAM_COSINE_ANGLES: Final[Array] = jnp.array(
     [
         0.0446339553,
@@ -205,6 +203,17 @@ def calculate_terms_for_DSolver(
     return (cp, cpm1, cm, cmm1, inverse_ep, btop, bottom, gama)
 
 
+"""
+@dataclass
+class DSolverOutputs:
+    # These remain as Array to bridge between JAX functions that produce these outputs
+    afs: Array
+    bfs: Array
+    cfs: Array
+    dfs: Array
+"""
+
+
 @jax.jit
 def DSolver_subroutine(
     cp: Array,
@@ -389,8 +398,15 @@ def calculate_flux(
     hh_terms: Array = xk2_terms * gama * (1.0 / mu_1 + lamda)
 
     blackbody_scattering_term: Array = term - mu_1
-    alpha1: Array = 2.0 * jnp.pi * (thermal_intensity + blackbody_scattering_term)
-    alpha2: Array = 2.0 * jnp.pi * delta_thermal_intensity
+    alpha1: Array = (
+        2.0
+        * jnp.pi
+        * (
+            thermal_intensity
+            + blackbody_scattering_term * delta_thermal_intensity / tau
+        )
+    )
+    alpha2: Array = 2.0 * jnp.pi * delta_thermal_intensity / tau
 
     axis_elements = []
     for i in range(1, w0.ndim + 1):

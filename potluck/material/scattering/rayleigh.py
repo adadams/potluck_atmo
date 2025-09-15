@@ -126,8 +126,8 @@ def calculate_H2_rayleigh_scattering_crosssections(
     Neglects terms of order lambda^10.
     """
 
-    return 8.14e-13 * wavelengths_in_angstroms ** (
-        -4
-    ) * 1.28e-6 * wavelengths_in_angstroms ** (
-        -6
-    ) + 1.61 * wavelengths_in_angstroms ** (-8)
+    return (
+        8.14e-13 * wavelengths_in_angstroms ** (-4)
+        + 1.28e-6 * wavelengths_in_angstroms ** (-6)
+        + 1.61 * wavelengths_in_angstroms ** (-8)
+    )

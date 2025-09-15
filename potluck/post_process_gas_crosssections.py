@@ -31,7 +31,7 @@ def merge_two_species(
 
 if __name__ == "__main__":
     gas_crosssection_filepath: Path = (
-        "/media/gba8kj/Orange/Opacities_0v10/gases/nirfs30k-2025-resampled.nc"
+        "/home/Research/Opacities_0v10/gases/nirfs30k-2025-resampled.nc"
     )
 
     gas_crosssection_dataset: xr.Dataset = xr.open_dataset(gas_crosssection_filepath)
@@ -62,7 +62,7 @@ if __name__ == "__main__":
                 relative_molecular_fraction_of_A=0.83,
             )
         }
-    ).get(["h2he", "h2o", "co", "co2", "ch4", "k", "nh3", "h2s"])
+    ).get(["h2", "he", "h2he", "h2o", "co", "co2", "ch4", "k", "nh3", "h2s"])
 
     gas_crosssection_dataset.to_netcdf(
         "/home/Research/Opacities_0v10/gases/nirfs30k_2025_Ross458c.nc"

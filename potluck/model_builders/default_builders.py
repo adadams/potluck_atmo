@@ -222,6 +222,24 @@ def build_uniform_gas_chemistry(
     return mixing_ratios_by_level_as_xarray
 
 
+class SlabCloudInputs(msgspec.Struct):
+    uniform_log_mixing_ratio: LogMixingRatioValue
+    cloud_top_log10_pressure: float
+    cloud_log10_thickness: float
+    pressure_units: str
+    mean_particle_radius: float
+    radius_units: str
+    log10_particle_distribution_standard_deviation: float = 0.5
+    additional_attributes: Optional[AttrsType] = msgspec.field(default_factory=dict)
+
+
+MultipleSlabCloudInputs: TypeAlias = dict[str, SlabCloudInputs]
+
+
+class Na2SSlabCloudInputs(msgspec.Struct):
+    crystalline_Na2S_Mie: SlabCloudInputs
+
+
 class SlabCloudSamples(msgspec.Struct):
     uniform_log_mixing_ratio: LogMixingRatioValue
     cloud_top_log10_pressure: float
@@ -237,7 +255,7 @@ def create_cloud_inputs_from_samples(
     log10_mean_particle_radius: float,
     log10_particle_distribution_standard_deviation: float,
     maximum_log10_pressure: float,
-) -> msgspec.Struct:
+) -> SlabCloudInputs:
     cloud_log10_thickness: PositiveValue = (
         convert_cloud_remaining_fraction_to_thickness(
             cloud_top_log10_pressure=cloud_top_log10_pressure,
@@ -255,24 +273,6 @@ def create_cloud_inputs_from_samples(
         radius_units="cm",
         log10_particle_distribution_standard_deviation=log10_particle_distribution_standard_deviation,
     )
-
-
-class SlabCloudInputs(msgspec.Struct):
-    uniform_log_mixing_ratio: LogMixingRatioValue
-    cloud_top_log10_pressure: float
-    cloud_log10_thickness: float
-    pressure_units: str
-    mean_particle_radius: float
-    radius_units: str
-    log10_particle_distribution_standard_deviation: float = 0.5
-    additional_attributes: Optional[AttrsType] = msgspec.field(default_factory=dict)
-
-
-MultipleSlabCloudInputs: TypeAlias = dict[str, SlabCloudInputs]
-
-
-class Na2SSlabCloudInputs(msgspec.Struct):
-    crystalline_Na2S_Mie: SlabCloudInputs
 
 
 def build_uniform_slab_cloud_chemistry(
@@ -863,7 +863,7 @@ def calculate_emission_model_with_spectral_groups(
 ) -> float:
     emission_fluxes = calculate_observed_fluxes_via_two_stream(
         forward_model_inputs=forward_model_inputs,
-        calculate_using_only_gas_opacities=False,
+        calculate_using_only_gas_opacities=True,
     )
 
     observable_parameters: xr.Dataset = forward_model_inputs[
