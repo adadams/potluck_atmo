@@ -22,6 +22,7 @@ user/even_older_style
 user/Ross458*
 
 potluck/material/clouds/*
+!potluck/material/clouds/cloud_metrics.py
 potluck/material/gases/reference_data/*.nc
 
 potluck/check_xarray_files.py

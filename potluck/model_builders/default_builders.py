@@ -863,7 +863,7 @@ def calculate_emission_model_with_spectral_groups(
 ) -> float:
     emission_fluxes = calculate_observed_fluxes_via_two_stream(
         forward_model_inputs=forward_model_inputs,
-        calculate_using_only_gas_opacities=True,
+        calculate_using_only_gas_opacities=False,
     )
 
     observable_parameters: xr.Dataset = forward_model_inputs[
