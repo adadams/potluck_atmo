@@ -139,7 +139,6 @@ def compile_composite_two_stream_parameters_with_gas_and_clouds(
             cloud_absorption_coefficients,
         ) = compute_cloud_log_normal_particle_distribution_opacities(
             cloud_particle_number_densities=cloud_number_densities_for_species.to_numpy(),
-            cloud_particles_densities=cloud_crosssections_for_species.cloud_material_density.item(),
             cloud_particles_mean_radii=cloud_number_densities_for_species.attrs[
                 "mean_particle_radius"
             ],
