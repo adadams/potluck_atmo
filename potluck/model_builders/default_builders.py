@@ -15,7 +15,8 @@ from potluck.basic_types import (
     PressureDimension,
 )
 from potluck.calculate_RT import (
-    calculate_observed_fluxes_via_two_stream,
+    calculate_observed_fluxes_with_clouds_via_two_stream,
+    calculate_observed_fluxes_without_clouds_via_two_stream,
     calculate_observed_transmission_spectrum,
 )
 from potluck.compile_crosssection_data import (
@@ -831,10 +832,10 @@ def build_forward_model_with_clouds(
     return atmospheric_model
 
 
-def calculate_emission_model(
+def calculate_emission_model_without_clouds(
     forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
 ) -> float:
-    emission_fluxes = calculate_observed_fluxes_via_two_stream(
+    emission_fluxes = calculate_observed_fluxes_without_clouds_via_two_stream(
         forward_model_inputs=forward_model_inputs
     )
 
@@ -858,12 +859,77 @@ def calculate_emission_model(
     return emission_fluxes_sampled_to_data
 
 
-def calculate_emission_model_with_spectral_groups(
+def calculate_emission_model_with_clouds(
     forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
 ) -> float:
-    emission_fluxes = calculate_observed_fluxes_via_two_stream(
-        forward_model_inputs=forward_model_inputs,
-        calculate_using_only_gas_opacities=False,
+    emission_fluxes = calculate_observed_fluxes_with_clouds_via_two_stream(
+        forward_model_inputs=forward_model_inputs
+    )
+
+    reference_model_wavelengths: xr.DataArray = forward_model_inputs[
+        "observable_parameters"
+    ].wavelength
+
+    emission_fluxes_sampled_to_data: xr.DataArray = (
+        resample_spectral_quantity_to_new_wavelengths(
+            reference_model_wavelengths,
+            emission_fluxes.wavelength,
+            emission_fluxes,
+            fwhm=resampling_fwhm_fraction
+            * (
+                reference_model_wavelengths.to_numpy()[-1]
+                - reference_model_wavelengths.to_numpy()[-2]
+            ),
+        )
+    ).rename("resampled_emission_flux")
+
+    return emission_fluxes_sampled_to_data
+
+
+def calculate_cloudy_emission_model_with_spectral_groups(
+    forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
+) -> float:
+    emission_fluxes = calculate_observed_fluxes_with_clouds_via_two_stream(
+        forward_model_inputs=forward_model_inputs
+    )
+
+    observable_parameters: xr.Dataset = forward_model_inputs[
+        "observable_parameters"
+    ].to_dataset()
+
+    reference_model_wavelengths: xr.DataArray = (
+        observable_parameters.wavelength.groupby("spectral_group")
+    )
+
+    def resample_spectrum_per_group(
+        spectral_group_wavelengths: xr.DataArray,
+        model_wavelengths: xr.DataArray = emission_fluxes.wavelength,
+        model_fluxes: xr.DataArray = emission_fluxes,
+        resampling_fwhm_fraction: float = resampling_fwhm_fraction,
+    ):
+        return resample_spectral_quantity_to_new_wavelengths(
+            spectral_group_wavelengths,
+            model_wavelengths,
+            model_fluxes,
+            fwhm=resampling_fwhm_fraction
+            * (
+                spectral_group_wavelengths.to_numpy()[-1]
+                - spectral_group_wavelengths.to_numpy()[-2]
+            ),
+        )
+
+    emission_fluxes_sampled_to_data: xr.DataArray = (
+        reference_model_wavelengths.map(resample_spectrum_per_group)
+    ).rename("resampled_emission_flux")
+
+    return emission_fluxes_sampled_to_data
+
+
+def calculate_cloudfree_emission_model_with_spectral_groups(
+    forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
+) -> float:
+    emission_fluxes = calculate_observed_fluxes_without_clouds_via_two_stream(
+        forward_model_inputs=forward_model_inputs
     )
 
     observable_parameters: xr.Dataset = forward_model_inputs[
