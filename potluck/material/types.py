@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from potluck.material.scattering.types import TwoStreamScatteringCoefficients
+from potluck.material.scattering.scattering_types import TwoStreamScatteringCoefficients
 
 
 @dataclass

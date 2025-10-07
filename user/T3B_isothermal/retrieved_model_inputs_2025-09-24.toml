@@ -1,35 +1,36 @@
 [metadata]
-model_ID = "RISOTTO_Planet0"
-run_date = "2025-07-22"
+model_ID = "RISOTTO_T3B_Full_retrieved"
+run_date = "2025-09-24"
 
 [fundamental_parameters] # build_default_fundamental_parameters
-planet_radius = 7.9559e7
+planet_radius = 18844238.80385079
 radius_units = "meters"
-log10_planet_gravity = 3.3666 # 23.26 m/s^2
+log10_planet_gravity = 2.878752 # 23.26 m/s^2
 gravity_units = "cm/s^2"
 
 [pressure_profile] # build_pressure_profile_from_log_pressures
 shallowest_log10_pressure = -6.0
-deepest_log10_pressure =    1.0
+deepest_log10_pressure =    0.0
 units = "bar"
-number_of_levels = 36
+number_of_levels = 71
 
 [temperature_profile.model_parameters] # build_temperature_profile -> generate_isothermal_model -> IsothermalTemperatureModelParameters
-temperature = 1500
+temperature = 382.43531046581063
 
 [gas_chemistry] # build_uniform_gas_chemistry
 filler_species = "h2he"
 
 [gas_chemistry.log_mixing_ratios] # 85% H2, 15% He by molecule count
-"h2o" =         -3.523 # 300 ppmv
-"co" =          -3.456 # 350 ppmv
+"he"  =         -3.2709612478802246
+"h2o" =         -2.3705055753145023
+"ch4" =         -2.4294855113156473
 
 [observable_inputs]
 distance_to_system =  99.9999999
 distance_units = "parsec"
-stellar_radius =      5.43e8
+stellar_radius =      153_054_000
 radius_units = "meters"
 
 [reference_data]
 gas_opacity_catalog_filepath = "/home/Research/Opacities_0v10/gases/wide.nc"
-reference_wavelength_filename = "/home/gba8kj/Documents/Astronomy/code/potluck/user/Planet0/Planet0_data.nc"
+reference_wavelength_filename = "/home/gba8kj/Documents/Astronomy/code/potluck/user/T3B_isothermal/T3B_risotto_Full_data.nc"

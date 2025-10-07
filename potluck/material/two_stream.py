@@ -13,10 +13,10 @@ from potluck.material.clouds.cloud_metrics import (
 from potluck.material.scattering.rayleigh import (
     calculate_two_stream_scattering_components,
 )
+from potluck.material.scattering.scattering_types import TwoStreamScatteringCoefficients
 from potluck.material.scattering.two_stream import (
     calculate_two_stream_scattering_parameters,
 )
-from potluck.material.scattering.types import TwoStreamScatteringCoefficients
 from potluck.material.types import TwoStreamParameters, TwoStreamScatteringParameters
 
 # @dataclass
@@ -62,9 +62,7 @@ def compile_gas_two_stream_inputs(
     number_density: xr.DataArray,  # (species, pressure)
 ) -> xr.Dataset:
     scattering_coefficients: TwoStreamScatteringCoefficients = (
-        calculate_two_stream_scattering_components(
-            wavelengths_in_cm, crosssections, number_density
-        )
+        calculate_two_stream_scattering_components(wavelengths_in_cm, number_density)
     )
 
     absorption_coefficients: xr.Dataset = crosssections_to_attenuation_coefficients(
@@ -123,6 +121,7 @@ def compile_composite_two_stream_parameters_with_gas_and_clouds(
     gas_two_stream_inputs: xr.Dataset = compile_gas_two_stream_inputs(
         wavelengths_in_cm, gas_crosssections, gas_number_density
     )
+    gas_two_stream_inputs.to_netcdf("gas_two_stream_inputs.nc")
 
     for cloud_species in cloud_crosssections.children:
         cloud_crosssections_for_species: xr.DataArray = cloud_crosssections[
@@ -189,6 +188,7 @@ def compile_composite_two_stream_parameters_with_gas_and_clouds(
                 "absorption_coefficients": cloud_absorption_dataarray,
             }
         )
+        cloud_two_stream_inputs.to_netcdf("cloud_two_stream_inputs.nc")
 
     return compile_composite_two_stream_parameters(
         [gas_two_stream_inputs, cloud_two_stream_inputs], path_lengths

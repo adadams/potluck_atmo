@@ -17,12 +17,12 @@ from potluck.model_builders.default_builders import (
     build_pressure_profile_from_log_pressures,
     build_temperature_profile,
     build_uniform_gas_chemistry,
-    calculate_emission_model_without_clouds,
+    calculate_transmission_model,
     compile_vertical_structure,
 )
 from potluck.temperature.models import (
-    PietteTemperatureModelArguments,
-    generate_piette_model,
+    IsothermalTemperatureModelArguments,
+    generate_isothermal_model,
 )
 from potluck.temperature.protocols import TemperatureModelConstructor
 from potluck.xarray_serialization import AttrsType
@@ -34,7 +34,7 @@ class ModelInputs(msgspec.Struct):
     metadata: AttrsType
     fundamental_parameters: DefaultFundamentalParameterInputs
     pressure_profile: EvenlyLogSpacedPressureProfileInputs
-    temperature_profile: PietteTemperatureModelArguments
+    temperature_profile: IsothermalTemperatureModelArguments
     gas_chemistry: UniformGasChemistryInputs
     observable_inputs: DefaultObservableInputs
     reference_data: AttrsType
@@ -49,7 +49,9 @@ def build_model_from_inputs(inputs_from_file: ModelInputs) -> xr.DataTree:
         inputs_from_file.pressure_profile
     )
 
-    temperature_model_constructor: TemperatureModelConstructor = generate_piette_model
+    temperature_model_constructor: TemperatureModelConstructor = (
+        generate_isothermal_model
+    )
 
     temperature_profile: xr.Dataset = build_temperature_profile(
         temperature_model_constructor=temperature_model_constructor,
@@ -100,6 +102,19 @@ def build_model_from_inputs(inputs_from_file: ModelInputs) -> xr.DataTree:
     return forward_model_structure
 
 
+def evaluate_transmission_spectrum(
+    inputs_from_toml_file: ModelInputs, resampling_fwhm_fraction: float
+):
+    forward_model: xr.DataTree = build_model_from_inputs(inputs_from_toml_file)
+
+    transmission_model_spectrum: xr.DataArray = calculate_transmission_model(
+        forward_model_inputs=forward_model,
+        resampling_fwhm_fraction=resampling_fwhm_fraction,
+    )
+
+    return transmission_model_spectrum
+
+
 if __name__ == "__main__":
     input_toml_filepath: Path = current_directory / "model_inputs.toml"
 
@@ -110,12 +125,9 @@ if __name__ == "__main__":
             )
 
     model_ID: str = inputs_from_toml_file.metadata["model_ID"]
-    run_date: str = inputs_from_toml_file.metadata["run_date"]
-
-    save_name: str = f"{model_ID}_{run_date}"
 
     forward_model_structure_filepath: Path = (
-        current_directory / f"{save_name}_forward_model_structure.nc"
+        current_directory / f"{model_ID}_forward_model_structure.nc"
     )
 
     # check if pre-compiled forward model structure exists
@@ -142,9 +154,16 @@ if __name__ == "__main__":
 
         forward_model_structure.to_netcdf(forward_model_structure_filepath)
 
-    emission_model: xr.DataTree = calculate_emission_model_without_clouds(
-        forward_model_inputs=forward_model_structure,
-        resampling_fwhm_fraction=0.1,
-    )
+    for i in range(10):
+        transmission_model: xr.DataTree = calculate_transmission_model(
+            forward_model_inputs=forward_model_structure,
+            resampling_fwhm_fraction=200.0,
+        )
 
-    emission_model.to_netcdf(current_directory / f"{save_name}_emission_model.nc")
+    radius_printout: str = f"{forward_model_structure['atmospheric_structure_by_layer']['vertical_structure']['planet_radius'].item():.3g}m"
+    base_pressure_printout: str = f"{forward_model_structure['atmospheric_structure_by_layer']['vertical_structure']['pressure'].max().item():.3g}barye"
+
+    transmission_model.to_netcdf(
+        current_directory
+        / f"{model_ID}_transmission_model_radius_{radius_printout}_base_pressure_{base_pressure_printout}.nc"
+    )

@@ -102,3 +102,12 @@ def calculate_uniform_mixing_ratios_in_slab_multi_layer(
             np.zeros(number_of_pressure_layers - slab_bottom_level_index - 1),
         ]
     )
+
+
+def convert_mass_mixing_ratios_to_volume_mixing_ratios(
+    mass_mixing_ratios: MixingRatios, molecular_densities: dict[str, float]
+) -> MixingRatios:
+    return {
+        species: mixing_ratio / molecular_densities[species]
+        for species, mixing_ratio in mass_mixing_ratios.items()
+    }
