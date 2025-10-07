@@ -7,7 +7,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from potluck.basic_types import NormalizedValue
 from potluck.material.scattering.rayleigh import (
-    calculate_H2_rayleigh_scattering_crosssections,
+    calculate_H2_rayleigh_scattering_crosssections_in_cm2,
 )
 from potluck.xarray_functional_wrappers import convert_units
 
@@ -41,9 +41,13 @@ if __name__ == "__main__":
     )
 
     H2_rayleigh_scattering_crosssections: xr.DataArray = (
-        calculate_H2_rayleigh_scattering_crosssections(
+        calculate_H2_rayleigh_scattering_crosssections_in_cm2(
             crosssection_wavelengths_in_angstroms
         )
+    )
+    test_slice: slice = slice(1.0, 2.0)
+    print(
+        f"{(H2_rayleigh_scattering_crosssections.sel(wavelength=test_slice) / gas_crosssection_dataset.h2only.sel(wavelength=test_slice)).median()=}"
     )
 
     H2_crosssections_with_rayleigh_scattering: xr.DataArray = (
@@ -51,7 +55,8 @@ if __name__ == "__main__":
     ).assign_attrs(notes="Rayleigh scattering added")
 
     gas_crosssection_dataset: xr.Dataset = gas_crosssection_dataset.assign(
-        {"h2": H2_crosssections_with_rayleigh_scattering}
+        # {"h2": H2_crosssections_with_rayleigh_scattering}
+        {"h2": gas_crosssection_dataset.h2only}
     )
 
     gas_crosssection_dataset: xr.Dataset = gas_crosssection_dataset.assign(
@@ -65,5 +70,5 @@ if __name__ == "__main__":
     ).get(["h2", "he", "h2he", "h2o", "co", "co2", "ch4", "k", "nh3", "h2s"])
 
     gas_crosssection_dataset.to_netcdf(
-        "/home/Research/Opacities_0v10/gases/nirfs30k_2025_Ross458c.nc"
+        "/home/Research/Opacities_0v10/gases/nirfs30k_2025_Ross458c_no_rayleigh.nc"
     )

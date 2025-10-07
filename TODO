@@ -3,6 +3,13 @@ General data structures:
     - Can we use type annotations to notate the sort of structure that should go in, without prescribing it as a "Dimensionalize" decorator does?
     - Saving intermediate outputs as xarray datasets to user folders. If the functions are doing this saving, they have to have some knowledge of these paths to save the files. Should they? Should this be a wrapper for saving xarray outputs?
 
+  ☐ The file and function names for the RT part are similar, which makes it hard to follow. For example, there are two "two_stream.py" files in material/ and material/scattering. Then, in the material/two_stream.py file, you have several functions with some combination of "compile" and "two_stream_parameters".
+  ☐ Revising the Dimensionalize decorator to handle positional and keyword arguments.
+
+General workflow structure:
+  ☐ The TemperatureModelConstructor should be coupled with the struct for the input arguments (TemperatureModelArguments) so that the proper function is called.
+  ☐ compare_model workflow is sloppy. Too many duplicate things that have to be changed separately.
+
 Input file formats:
   ✔ Make the "*forward_model_inputs.py" less "active": @done(25-08-07 09:58)
     ✔ Write a script to generate a default version from template. Less Python code, more plaintext. @done(25-08-07 09:58)
@@ -18,7 +25,8 @@ Test RT scheme:
   ✔ We need to do a very stripped-back test of each RT scheme. Fully isothermal, H2-only atmosphere, compare with both APOLLO and PICASO. @done(25-08-07 09:58)
 
 Retrieval setup:
-  ☐ 
+  ☐ I think it would be good to have a single input for convolution parameters. Maybe write a quick function that helps with down-sampling JWST NIRSpec spectra specifically?
+  ☐ We need to separate out directory information for reference data, since that is computer-specific. We may want to have that information in its own toml file.
 
 Retrieval results:
   ☐ Write a template script to reverse the conversion from sampler parameters to free parameters, so we have the retrieved actual parameters.

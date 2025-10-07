@@ -5,12 +5,11 @@ import msgspec
 import xarray as xr
 from build_model import ModelInputs, evaluate_transmission_spectrum
 from matplotlib import pyplot as plt
-from run_retrieval import ModelFreeParameters
-
 from potluck.model_statistics.calculate_statistics import (
     calculate_reduced_chi_squared_statistic,
 )
 from potluck.xarray_functional_wrappers import convert_units
+from run_retrieval import ModelFreeParameters
 
 current_directory: Path = Path(__file__).parent
 project_directory: Path = Path.cwd() / "potluck"
@@ -20,7 +19,10 @@ number_of_free_parameters: int = len(get_annotations(ModelFreeParameters))
 plt.style.use(project_directory / "arthur.mplstyle")
 
 if __name__ == "__main__":
-    MLE_inputs_as_toml_filepath: Path = current_directory / "model_inputs.toml"
+    MLE_inputs_as_toml_filepath: Path = (
+        current_directory
+        / "RISOTTO_T3B_Full_higher_pressure_2025-09-25_MLE_inputs.toml"
+    )
 
     with open(MLE_inputs_as_toml_filepath, "rb") as MLE_inputs_file:
         MLE_inputs: ModelInputs = msgspec.toml.decode(
@@ -28,7 +30,7 @@ if __name__ == "__main__":
         )
 
     MLE_dataset_filepath: Path = (
-        current_directory / "RISOTTO_T3B_Full_2025-09-24_MLE.nc"
+        current_directory / "RISOTTO_T3B_Full_higher_pressure_2025-09-25_MLE.nc"
     )
     MLE_dataset: xr.Dataset = xr.open_dataset(MLE_dataset_filepath)
 
@@ -48,7 +50,7 @@ if __name__ == "__main__":
         wavelength=transmission_spectrum.wavelength
     )
 
-    figure, axis = plt.subplots(figsize=(15, 5))
+    figure, axis = plt.subplots(figsize=(20, 5))
 
     reduced_chi_squared_statistic: float = calculate_reduced_chi_squared_statistic(
         transmission_spectrum,

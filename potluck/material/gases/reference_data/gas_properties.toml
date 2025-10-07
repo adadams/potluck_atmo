@@ -1,4 +1,5 @@
 h2 =          { scaopac = 0.673e-27, mmw = 2.33 }
+h2he =        { scaopac = 0,         mmw = 2.55 } # 87% H2, 13% He
 he =          { scaopac = 0,         mmw = 4.00 }
 h- =          { scaopac = 0,         mmw = 1.01 }
 h2o =         { scaopac = 2.454e-27, mmw = 18.02 }

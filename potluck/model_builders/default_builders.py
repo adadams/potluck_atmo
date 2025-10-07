@@ -16,6 +16,7 @@ from potluck.basic_types import (
 )
 from potluck.calculate_RT import (
     calculate_observed_fluxes_with_clouds_via_two_stream,
+    calculate_observed_fluxes_without_clouds_via_one_stream,
     calculate_observed_fluxes_without_clouds_via_two_stream,
     calculate_observed_transmission_spectrum,
 )
@@ -239,6 +240,10 @@ MultipleSlabCloudInputs: TypeAlias = dict[str, SlabCloudInputs]
 
 class Na2SSlabCloudInputs(msgspec.Struct):
     crystalline_Na2S_Mie: SlabCloudInputs
+
+
+class Mg2SiO4SlabCloudInputs(msgspec.Struct):
+    amorphous_forsterite_Mie: SlabCloudInputs
 
 
 class SlabCloudSamples(msgspec.Struct):
@@ -848,11 +853,11 @@ def calculate_emission_model_without_clouds(
             reference_model_wavelengths,
             emission_fluxes.wavelength,
             emission_fluxes,
-            fwhm=resampling_fwhm_fraction
-            * (
-                reference_model_wavelengths.to_numpy()[-1]
-                - reference_model_wavelengths.to_numpy()[-2]
-            ),
+            fwhm=resampling_fwhm_fraction,
+            # * (
+            #    reference_model_wavelengths.to_numpy()[-1]
+            #    - reference_model_wavelengths.to_numpy()[-2]
+            # ),
         )
     ).rename("resampled_emission_flux")
 
@@ -875,11 +880,11 @@ def calculate_emission_model_with_clouds(
             reference_model_wavelengths,
             emission_fluxes.wavelength,
             emission_fluxes,
-            fwhm=resampling_fwhm_fraction
-            * (
-                reference_model_wavelengths.to_numpy()[-1]
-                - reference_model_wavelengths.to_numpy()[-2]
-            ),
+            fwhm=resampling_fwhm_fraction,
+            # * (
+            #    reference_model_wavelengths.to_numpy()[-1]
+            #    - reference_model_wavelengths.to_numpy()[-2]
+            # ),
         )
     ).rename("resampled_emission_flux")
 
@@ -911,11 +916,11 @@ def calculate_cloudy_emission_model_with_spectral_groups(
             spectral_group_wavelengths,
             model_wavelengths,
             model_fluxes,
-            fwhm=resampling_fwhm_fraction
-            * (
-                spectral_group_wavelengths.to_numpy()[-1]
-                - spectral_group_wavelengths.to_numpy()[-2]
-            ),
+            fwhm=resampling_fwhm_fraction,
+            # * (
+            #    spectral_group_wavelengths.to_numpy()[-1]
+            #    - spectral_group_wavelengths.to_numpy()[-2]
+            # ),
         )
 
     emission_fluxes_sampled_to_data: xr.DataArray = (
@@ -950,11 +955,11 @@ def calculate_cloudfree_emission_model_with_spectral_groups(
             spectral_group_wavelengths,
             model_wavelengths,
             model_fluxes,
-            fwhm=resampling_fwhm_fraction
-            * (
-                spectral_group_wavelengths.to_numpy()[-1]
-                - spectral_group_wavelengths.to_numpy()[-2]
-            ),
+            fwhm=resampling_fwhm_fraction,
+            # * (
+            #    spectral_group_wavelengths.to_numpy()[-1]
+            #    - spectral_group_wavelengths.to_numpy()[-2]
+            # ),
         )
 
     emission_fluxes_sampled_to_data: xr.DataArray = (
@@ -980,11 +985,11 @@ def calculate_transmission_model(
             reference_model_wavelengths,
             transit_depths.wavelength,
             transit_depths,
-            fwhm=resampling_fwhm_fraction
-            * (
-                reference_model_wavelengths.to_numpy()[-1]
-                - reference_model_wavelengths.to_numpy()[-2]
-            ),
+            fwhm=resampling_fwhm_fraction,
+            # * (
+            #    reference_model_wavelengths.to_numpy()[-1]
+            #    - reference_model_wavelengths.to_numpy()[-2]
+            # ),
         )
     ).rename("resampled_transmission_flux")
 

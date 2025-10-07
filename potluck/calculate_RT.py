@@ -360,6 +360,77 @@ def calculate_observed_fluxes_without_clouds_via_two_stream(
     return observed_twostream_flux
 
 
+def calculate_observed_fluxes_without_clouds_via_one_stream(
+    forward_model_inputs: xr.DataTree,
+) -> xr.DataArray:
+    temperatures_by_level: xr.DataArray = forward_model_inputs[
+        "temperature_profile_by_level"
+    ].temperature
+
+    atmospheric_structure_by_layer: xr.DataArray = forward_model_inputs[
+        "atmospheric_structure_by_layer"
+    ]
+
+    vertical_structure_by_layer: xr.DataArray = atmospheric_structure_by_layer[
+        "vertical_structure"
+    ]
+
+    number_densities_by_layer: xr.DataArray = (
+        atmospheric_structure_by_layer["gas_number_densities"]
+        .to_dataset()
+        .to_dataarray(dim="species")
+    )
+
+    gas_crosssection_catalog: xr.Dataset = forward_model_inputs["reference_data"][
+        "gas_crosssection_catalog"
+    ].to_dataset()
+
+    gas_crosssection_catalog_as_dataarray: xr.DataArray = (
+        gas_crosssection_catalog.to_array(dim="species", name="crosssections")
+    )
+
+    model_wavelengths_in_cm: xr.DataArray = gas_crosssection_catalog.wavelength
+
+    thermal_intensities: xr.Dataset = compile_thermal_structure_for_forward_model(
+        temperatures_by_level=temperatures_by_level,
+        model_wavelengths_in_cm=model_wavelengths_in_cm,
+    )
+
+    path_lengths_in_cm: xr.DataArray = vertical_structure_by_layer.path_lengths
+
+    absorption_coefficients: xr.Dataset = crosssections_to_attenuation_coefficients(
+        gas_crosssection_catalog_as_dataarray, number_densities_by_layer
+    )
+
+    optical_depth: xr.DataArray = attenuation_coefficients_to_optical_depths(
+        absorption_coefficients, path_lengths_in_cm
+    )
+
+    cumulative_optical_depth_by_layer: xr.DataArray = (
+        optical_depth.cumulative("pressure").sum().sum("species")
+    )
+
+    onestream_inputs: OneStreamRTInputs = OneStreamRTInputs(
+        thermal_intensity=thermal_intensities.thermal_intensity_by_layer,
+        cumulative_optical_depth_by_layer=cumulative_optical_depth_by_layer,
+    )
+
+    emitted_onestream_flux: xr.DataArray = calculate_spectral_intensity_at_surface(
+        *astuple(onestream_inputs)
+    )
+
+    observed_onestream_flux: xr.DataArray = (
+        emitted_onestream_flux
+        * (
+            vertical_structure_by_layer.planet_radius
+            / forward_model_inputs["observable_parameters"].distance_to_system
+        )
+        ** 2
+    ).rename("observed_onestream_flux")
+
+    return observed_onestream_flux
+
+
 def resample_observed_fluxes(
     observed_fluxes: dict[str, xr.DataArray],
     reference_model_wavelengths: xr.DataArray,

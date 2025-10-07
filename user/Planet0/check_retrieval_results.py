@@ -43,7 +43,7 @@ corner(
     show_titles=True,
     title_fmt=".3f",
     title_kwargs=dict(fontsize=19),
-    color="deeppink",
+    color="crimson",
     plot_datapoints=False,
     range=np.repeat(0.999, len(plot_labels)),
 )

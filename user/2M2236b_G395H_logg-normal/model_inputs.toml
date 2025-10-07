@@ -1,6 +1,6 @@
 [metadata]
 model_ID = "2M2236b_G395H_logg-normal"
-run_date = "N/A"
+run_date = "onestream_RT_test"
 
 [fundamental_parameters] # build_default_fundamental_parameters
 planet_radius = 7.776098627
@@ -51,5 +51,6 @@ radius_units = "Solar_radii"
 
 [reference_data]
 # gas_opacity_catalog_filepath = "/media/gba8kj/Orange/Opacities_0v10/gases/jwst50k.nc"
-gas_opacity_catalog_filepath = "/Volumes/Orange/Opacities_0v10/gases/jwst50k.nc"
-reference_wavelength_filename = "/Users/arthur/Documents/Astronomy/code/potluck/user/2M2236b_G395H_logg-normal/reference_model_for_wavelengths.nc"
+gas_opacity_catalog_filepath = "/home/Research/Opacities_0v10/gases/jwst50k.nc"
+# reference_wavelength_filename = "/Users/arthur/Documents/Astronomy/code/potluck/user/2M2236b_G395H_logg-normal/reference_model_for_wavelengths.nc"
+reference_wavelength_filename = "/home/gba8kj/Documents/Astronomy/code/potluck/user/2M2236b_G395H_logg-normal/reference_model_for_wavelengths.nc"

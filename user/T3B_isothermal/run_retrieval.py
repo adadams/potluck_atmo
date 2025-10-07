@@ -12,7 +12,6 @@ from nautilus import Prior, Sampler
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from build_model import ModelInputs, evaluate_transmission_spectrum
-
 from potluck.basic_types import LogMixingRatioValue, PositiveValue, TemperatureValue
 from potluck.model_builders.default_builders import (
     DefaultFundamentalParameterInputs,
@@ -139,8 +138,8 @@ if __name__ == "__main__":
         evaluate_log_likelihood_with_free_parameters(
             free_parameters={
                 "planet_radius_in_meters": 7.9559e7,
-                "deepest_log10_pressure": 0.0,
                 "isothermal_temperature": 800.0,
+                "deepest_log10_pressure": 0.0,
                 "uniform_he_log_abundance": -0.770,
                 "uniform_h2o_log_abundance": -3.523,
                 "uniform_ch4_log_abundance": -3.456,
@@ -158,9 +157,8 @@ if __name__ == "__main__":
         prior = Prior()
         radius_range = (10**6.804, 10**7.804)
         prior.add_parameter("planet_radius_in_meters", dist=radius_range)
-
         prior.add_parameter("isothermal_temperature", dist=(100.0, 1000.0))
-        prior.add_parameter("deepest_log10_pressure", dist=(-5.0, 0.0))
+        prior.add_parameter("deepest_log10_pressure", dist=(-5.0, 2.5))
         prior.add_parameter("uniform_he_log_abundance", dist=(-10.0, -0.3011))
         prior.add_parameter("uniform_h2o_log_abundance", dist=(-10.0, -1.0))
         prior.add_parameter("uniform_ch4_log_abundance", dist=(-10.0, -1.0))

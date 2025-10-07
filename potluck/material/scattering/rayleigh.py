@@ -2,7 +2,7 @@ import numpy as np
 import xarray as xr
 
 from potluck.basic_types import PressureDimension, WavelengthDimension
-from potluck.material.scattering.types import TwoStreamScatteringCoefficients
+from potluck.material.scattering.scattering_types import TwoStreamScatteringCoefficients
 from potluck.xarray_functional_wrappers import Dimensionalize
 
 REFERENCE_FREQUENCY_IN_HZ: float = 5.0872638e14
@@ -40,7 +40,7 @@ def calculate_rayleigh_scattering_crosssections(
     argument_dimensions=(
         (WavelengthDimension,),
         (
-            PressureDimension,
+            # PressureDimension,
             WavelengthDimension,
         ),
         (PressureDimension,),
@@ -54,31 +54,39 @@ def calculate_rayleigh_scattering_crosssections(
 )
 def calculate_rayleigh_scattering_attenuation_coefficients(
     wavelengths_in_cm: float | np.ndarray[np.float64],
-    crosssections: float | np.ndarray[np.float64],
+    rayleigh_scattering_crosssections: float | np.ndarray[np.float64],
     number_density: np.ndarray[np.float64],
     reference_frequency: float = REFERENCE_FREQUENCY_IN_HZ,
 ) -> float | np.ndarray[np.float64]:
     frequencies: float | np.ndarray[np.float64] = C_IN_CGS / wavelengths_in_cm
 
-    return crosssections * (frequencies / reference_frequency) ** 4 * number_density
+    return (
+        rayleigh_scattering_crosssections
+        * (frequencies / reference_frequency) ** 4
+        * number_density[:, np.newaxis]
+    ).T
 
 
 def calculate_two_stream_scattering_components(
     wavelengths_in_cm: xr.DataArray,
-    crosssections: xr.DataArray,
+    # scattering_crosssections: xr.DataArray,
     number_density: xr.DataArray,
-    reference_frequency: float = REFERENCE_FREQUENCY_IN_HZ,
+    # reference_frequency: float = REFERENCE_FREQUENCY_IN_HZ,
 ) -> TwoStreamScatteringCoefficients:
     rayleigh_scattering_crosssections: xr.DataArray = (
-        calculate_rayleigh_scattering_crosssections(
-            wavelengths_in_cm,
-            crosssections,
-            reference_frequency=reference_frequency,
+        calculate_H2_rayleigh_scattering_crosssections_in_cm2(
+            wavelengths_in_angstroms=wavelengths_in_cm * 1e8
         )
     )
+    # print(f"{rayleigh_scattering_crosssections=}")
+    # print(f"{number_density=}")
 
     rayleigh_scattering_attenuation_coefficients: xr.DataArray = (
-        rayleigh_scattering_crosssections * number_density
+        calculate_rayleigh_scattering_attenuation_coefficients(
+            wavelengths_in_cm,
+            rayleigh_scattering_crosssections,
+            number_density.sel(species=["h2"]),
+        )
     )
 
     forward_scattering_attentuation_coefficients: float | np.ndarray[np.float64] = (
@@ -118,7 +126,7 @@ def calculate_rayleigh_scattering_crosssections_from_refractive_indices(
     )
 
 
-def calculate_H2_rayleigh_scattering_crosssections(
+def calculate_H2_rayleigh_scattering_crosssections_in_cm2(
     wavelengths_in_angstroms: float | np.ndarray[np.float64],
 ) -> float | np.ndarray[np.float64]:
     """

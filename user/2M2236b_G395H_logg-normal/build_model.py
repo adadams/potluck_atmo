@@ -17,7 +17,7 @@ from potluck.model_builders.default_builders import (
     build_pressure_profile_from_log_pressures,
     build_temperature_profile,
     build_uniform_gas_chemistry,
-    calculate_emission_model,
+    calculate_emission_model_without_clouds,
     compile_vertical_structure,
 )
 from potluck.temperature.models import (
@@ -110,9 +110,12 @@ if __name__ == "__main__":
             )
 
     model_ID: str = inputs_from_toml_file.metadata["model_ID"]
+    run_date: str = inputs_from_toml_file.metadata["run_date"]
+
+    save_name: str = f"{model_ID}_{run_date}"
 
     forward_model_structure_filepath: Path = (
-        current_directory / f"{model_ID}_forward_model_structure.nc"
+        current_directory / f"{save_name}_forward_model_structure.nc"
     )
 
     # check if pre-compiled forward model structure exists
@@ -139,9 +142,9 @@ if __name__ == "__main__":
 
         forward_model_structure.to_netcdf(forward_model_structure_filepath)
 
-    emission_model: xr.DataTree = calculate_emission_model(
+    emission_model: xr.DataTree = calculate_emission_model_without_clouds(
         forward_model_inputs=forward_model_structure,
         resampling_fwhm_fraction=0.1,
     )
 
-    emission_model.to_netcdf(current_directory / f"{model_ID}_emission_model.nc")
+    emission_model.to_netcdf(current_directory / f"{save_name}_emission_model.nc")

@@ -40,3 +40,4 @@ potluck/speed_test_numba_RT.py
 potluck/material/scattering/check_rayleigh_equation.py
 
 slurm-*.out
+compare_with_pRT/ross458c_setup.py

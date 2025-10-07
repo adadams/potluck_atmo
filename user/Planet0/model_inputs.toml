@@ -31,6 +31,5 @@ stellar_radius =      5.43e8
 radius_units = "meters"
 
 [reference_data]
-gas_opacity_catalog_filepath = "/media/gba8kj/Orange/Opacities_0v10/gases/wide.nc"
-# gas_opacity_catalog_filepath = "/Volumes/Orange/Opacities_0v10/gases/wide.nc"
+gas_opacity_catalog_filepath = "/home/Research/Opacities_0v10/gases/wide.nc"
 reference_wavelength_filename = "/home/gba8kj/Documents/Astronomy/code/potluck/user/Planet0/Planet0_data.nc"

@@ -1,0 +1,42 @@
+[metadata]
+model_ID = "RISOTTO_T3B_Full"
+run_date = "2025-09-25"
+
+[fundamental_parameters]
+planet_radius = 18829858.006036125
+radius_units = "m"
+log10_planet_gravity = 2.878752
+gravity_units = "cm/s^2"
+
+[fundamental_parameters.additional_attributes]
+
+[pressure_profile]
+shallowest_log10_pressure = -6.0
+deepest_log10_pressure = -0.003267155486805784
+units = "bar"
+number_of_levels = 71
+
+[pressure_profile.additional_attributes]
+
+[temperature_profile.model_parameters]
+temperature = 356.7627567492193
+
+[gas_chemistry]
+filler_species = "h2only"
+
+[gas_chemistry.log_mixing_ratios]
+he = -4.762517193087201
+h2o = -2.5720540941764476
+ch4 = -2.548399863479071
+
+[gas_chemistry.additional_attributes]
+
+[observable_inputs]
+distance_to_system = 99.9999999
+stellar_radius = 153054000.0
+distance_units = "parsec"
+radius_units = "meters"
+
+[reference_data]
+gas_opacity_catalog_filepath = "/home/Research/Opacities_0v10/gases/wide.nc"
+reference_wavelength_filename = "/home/gba8kj/Documents/Astronomy/code/potluck/user/T3B_isothermal/T3B_risotto_Full_data.nc"

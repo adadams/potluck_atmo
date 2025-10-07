@@ -136,6 +136,90 @@ def create_monotonic_temperature_nodes_from_samples(
     return temperatures
 
 
+def create_monotonic_temperature_nodes_from_Ross_samples(
+    photospheric_temperature_3bar: TemperatureValue,
+    scaled_temperature_1bar: NormalizedValue,
+    scaled_temperature_0p1bar: NormalizedValue,
+    scaled_temperature_0p01bar: NormalizedValue,
+    scaled_temperature_0p001bar: NormalizedValue,
+    scaled_temperature_10bar: NormalizedValue,
+    scaled_temperature_30bar: NormalizedValue,
+    scaled_temperature_100bar: NormalizedValue,
+    lower_temperature_bound: TemperatureValue,  # usually fixed, set by e.g. opacity temperature range
+    upper_temperature_bound: TemperatureValue,  # usually fixed, set by e.g. opacity temperature range
+) -> np.ndarray[(8,), TemperatureValue]:
+    """
+    Enforces a temperature profile that does not decrease with increasing pressure.
+    """
+
+    number_of_pressure_nodes: int = 8
+    photospheric_index: int = 4
+
+    proportions_shallower: np.ndarray[
+        (number_of_pressure_nodes - photospheric_index,), NormalizedValue
+    ] = np.array(
+        [
+            scaled_temperature_1bar,
+            scaled_temperature_0p1bar,
+            scaled_temperature_0p01bar,
+            scaled_temperature_0p001bar,
+        ]
+    )
+    proportions_deeper: np.ndarray[
+        ((number_of_pressure_nodes - photospheric_index) - 1,), NormalizedValue
+    ] = np.array(
+        [scaled_temperature_10bar, scaled_temperature_30bar, scaled_temperature_100bar]
+    )
+
+    temperatures: np.ndarray[(number_of_pressure_nodes,), TemperatureValue] = np.empty(
+        (
+            number_of_pressure_nodes,
+            *np.shape(photospheric_temperature_3bar),
+        ),
+        dtype=np.float64,
+    )
+
+    # Back out the physical temperature at 3 bars, which is the fiducial photosphere,
+    # given its fractional position between the lower and upper bound of the valid temperatures.
+    temperatures[photospheric_index] = photospheric_temperature_3bar
+
+    current_temperature: TemperatureValue = photospheric_temperature_3bar
+    remaining_shallower_range: TemperatureValue = (
+        current_temperature - lower_temperature_bound
+    )
+
+    # Sample from the photospheric temperature to the top of the (model) atmosphere
+    for i in range(photospheric_index - 1, -1, -1):
+        proportion: NormalizedValue = proportions_shallower[photospheric_index - 1 - i]
+        decrement: TemperatureValue = np.where(
+            remaining_shallower_range > 0, proportion * remaining_shallower_range, 0
+        )
+        remaining_shallower_range -= decrement
+
+        temperatures[i] = current_temperature - decrement
+
+        current_temperature: TemperatureValue = temperatures[i]
+
+    # Sample from the photospheric temperature to the bottom of the (model) atmosphere
+    current_temperature: TemperatureValue = photospheric_temperature_3bar
+    remaining_upward_range: TemperatureValue = (
+        upper_temperature_bound - current_temperature
+    )
+
+    for i in range(photospheric_index + 1, number_of_pressure_nodes):
+        proportion: NormalizedValue = proportions_deeper[i - (photospheric_index + 1)]
+        increment: TemperatureValue = np.where(
+            remaining_upward_range > 0, proportion * remaining_upward_range, 0
+        )
+        remaining_upward_range -= increment
+
+        temperatures[i] = current_temperature + increment
+
+        current_temperature: TemperatureValue = temperatures[i]
+
+    return temperatures
+
+
 def general_piette_function(
     profile_log_pressures: np.ndarray[(NumberofModelPressures,), LogPressureValue],
     log_pressure_nodes: np.ndarray[(NumberofNodes,), LogPressureValue],
@@ -154,6 +238,17 @@ def general_piette_function(
     return TP_profile
 
 
+class PietteRossTemperatureModelParameters(TemperatureModelParameters):
+    temperature_0p001bar: TemperatureValue
+    temperature_0p01bar: TemperatureValue
+    temperature_0p1bar: TemperatureValue
+    temperature_1bar: TemperatureValue
+    photospheric_temperature_3bar: TemperatureValue
+    temperature_10bar: TemperatureValue
+    temperature_30bar: TemperatureValue
+    temperature_100bar: TemperatureValue
+
+
 class PietteTemperatureModelParameters(TemperatureModelParameters):
     temperature_0p0001bar: TemperatureValue
     temperature_0p001bar: TemperatureValue
@@ -170,6 +265,11 @@ class PietteTemperatureModelParameters(TemperatureModelParameters):
 class PietteTemperatureModelArguments(TemperatureModelArguments, kw_only=True):
     model_inputs: TemperatureBounds
     model_parameters: PietteTemperatureModelParameters
+
+
+class PietteRossTemperatureModelArguments(TemperatureModelArguments, kw_only=True):
+    model_inputs: TemperatureBounds
+    model_parameters: PietteRossTemperatureModelParameters
 
 
 def generate_piette_model(
@@ -191,7 +291,27 @@ def generate_piette_model(
     )
 
 
+def generate_piette_model_for_Ross458c(
+    model_parameters: PietteRossTemperatureModelParameters,
+) -> TemperatureModel:
+    log_pressure_nodes: np.ndarray[(8,), np.float64] = np.array(
+        [3, 4, 5, 6, 6.5, 7, 7.5, 8]
+    )  # cgs units (1 bar = 1e6 cgs "barye")
+    number_of_pressure_nodes: int = len(log_pressure_nodes)
+
+    temperature_nodes: np.ndarray[(number_of_pressure_nodes,), TemperatureValue] = (
+        np.asarray(astuple(model_parameters))
+    )
+
+    return partial(
+        general_piette_function,
+        log_pressure_nodes=log_pressure_nodes,
+        temperature_nodes=temperature_nodes,
+    )
+
+
 piette: TemperatureModel = generate_piette_model  # alias
+piette_for_Ross458c: TemperatureModel = generate_piette_model_for_Ross458c  # alias
 
 
 # ADA: the closest representation of the original Piette et. al. (2020) prescription.

@@ -1,26 +1,37 @@
 from inspect import get_annotations
 from pathlib import Path
+from typing import TypedDict
 
 import msgspec
 import numpy as np
 import xarray as xr
 from build_model import ModelInputs
-from run_retrieval import (
-    ModelFreeParameters,
-    replace_inputs_with_free_parameters,
-)
+from potluck.basic_types import LogMixingRatioValue, PositiveValue, TemperatureValue
+from run_retrieval import ModelFreeParameters, replace_inputs_with_free_parameters
 
 project_directory: Path = Path.cwd() / "potluck"
 current_directory: Path = Path(__file__).parent
 
-retrieval_run_name: str = "RISOTTO_T3B_Full"
-run_date_tag: str = "2025-09-24"
+retrieval_run_name: str = "RISOTTO_T3B_Full_higher_pressure"
+run_date_tag: str = "2025-09-25"
 retrieval_run_prefix: str = f"{retrieval_run_name}_{run_date_tag}"
 
 sampled_points_filepath: Path = current_directory / f"{retrieval_run_prefix}_points.npy"
 log_likelihoods_filepath: Path = current_directory / f"{retrieval_run_prefix}_log_l.npy"
 log_weights_filepath: Path = current_directory / f"{retrieval_run_prefix}_log_w.npy"
 evidences_filepath: Path = current_directory / f"{retrieval_run_prefix}_log_z.npy"
+
+EARTH_RADIUS_IN_METERS: float = 6.371e6
+
+
+class ModelFreePlotParameters(TypedDict):
+    planet_radius_vs_earth: PositiveValue
+    isothermal_temperature: TemperatureValue
+    deepest_log10_pressure: float
+    uniform_he_log_abundance: LogMixingRatioValue
+    uniform_h2o_log_abundance: LogMixingRatioValue
+    uniform_ch4_log_abundance: LogMixingRatioValue
+
 
 if __name__ == "__main__":
     sampled_points: np.ndarray = np.load(sampled_points_filepath)
@@ -68,6 +79,10 @@ if __name__ == "__main__":
             "dims": {"sample": "sample"},
             "attrs": {"evidence": evidence, "earth_radius_in_cm": 6.371e8},
         }
+    )
+
+    sample_dataset["planet_radius_vs_earth"] = (
+        sample_dataset["planet_radius_in_meters"] / EARTH_RADIUS_IN_METERS
     )
 
     results_dataset: xr.Dataset = xr.merge(
