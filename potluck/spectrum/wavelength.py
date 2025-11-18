@@ -3,8 +3,9 @@ from functools import partial, wraps
 from typing import Any
 
 import numpy as np
+import xarray as xr
 
-from xarray_serialization import UnitsAttrs, XarrayDimension, XarrayVariable
+from potluck.xarray_serialization import UnitsAttrs, XarrayDimension, XarrayVariable
 
 type CoordinateBuilder = Callable[
     [np.ndarray[np.float64], XarrayDimension, UnitsAttrs, type], XarrayVariable
@@ -26,13 +27,16 @@ class WavelengthCoordinate(XarrayVariable): ...
 build_wavelength_coordinate: CoordinateBuilder = partial(
     build_coordinate,
     dims=("wavelength",),
-    attrs=UnitsAttrs(units="micron"),
-    coordinate_class=WavelengthCoordinate,
+    attrs=dict(units="micron"),
+    # attrs=UnitsAttrs(units="micron"),
+    coordinate_class=xr.Variable,
+    # coordinate_class=WavelengthCoordinate,
 )
 
 
 def return_coordinate(dims: XarrayDimension, units: str) -> Callable:
-    attrs: UnitsAttrs = UnitsAttrs(units=units)
+    # attrs: UnitsAttrs = UnitsAttrs(units=units)
+    attrs = dict(units=units)
 
     def build_function_with_result_in_coordinate_form(
         function: Callable[[Any], np.ndarray[np.float64]],

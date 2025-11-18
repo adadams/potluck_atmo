@@ -9,6 +9,7 @@ SOLAR_METAL_FRACTION: Final[float] = 0.0196
 
 NONMETAL_MOLECULAR_WEIGHTS: Final[dict[str, float]] = {
     "h": 1.01,
+    "h-": 1.01,
     "h2": 2.02,
     "h2only": 2.02,
     "he": 4.00,

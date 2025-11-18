@@ -78,8 +78,6 @@ def calculate_two_stream_scattering_components(
             wavelengths_in_angstroms=wavelengths_in_cm * 1e8
         )
     )
-    # print(f"{rayleigh_scattering_crosssections=}")
-    # print(f"{number_density=}")
 
     rayleigh_scattering_attenuation_coefficients: xr.DataArray = (
         calculate_rayleigh_scattering_attenuation_coefficients(

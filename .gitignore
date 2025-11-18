@@ -20,6 +20,7 @@ user/old_files_for_comparison/
 user/old_style
 user/even_older_style
 user/Ross458*
+user/HD106906*
 
 potluck/material/clouds/*
 !potluck/material/clouds/cloud_metrics.py
@@ -41,3 +42,9 @@ potluck/material/scattering/check_rayleigh_equation.py
 
 slurm-*.out
 compare_with_pRT/ross458c_setup.py
+potluck/curate_TauREX_molecular_crosssections.py
+potluck/temperature/compare_TP_models.py
+potluck/temperature/poseidon_piette_function.py
+examine_Na2S_optical_depths.py
+pyROX/
+compare_with_pRT/

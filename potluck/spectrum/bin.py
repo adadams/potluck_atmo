@@ -41,6 +41,7 @@ def convolve_and_bin_with_constant_R(
     model_wavelengths: np.ndarray[np.float64],
     model_spectral_quantity: np.ndarray[np.float64],
     fwhm: float,
+    model_errors: Optional[np.ndarray[np.float64]] = None,
 ):
     # the rest of the code uses fwhm, so let's fudge and just put R where fwhm should be
     R = fwhm
@@ -49,7 +50,16 @@ def convolve_and_bin_with_constant_R(
         model_wavelengths, model_spectral_quantity, R
     )
 
-    return spectres(new_wavelengths, model_wavelengths, convolved_spectrum)
+    if model_errors is not None:
+        convolved_model_errors: np.ndarray[np.float64] = convolve_to_constant_R(
+            model_wavelengths, model_errors, R
+        )
+    else:
+        convolved_model_errors = None
+
+    return spectres(
+        new_wavelengths, model_wavelengths, convolved_spectrum, convolved_model_errors
+    )
 
 
 convolve_and_resample_by_spectres = partial(
@@ -57,6 +67,21 @@ convolve_and_resample_by_spectres = partial(
     convolve_and_bin_with_constant_R,
     input_core_dims=[["wavelength"], ["wavelength"], ["wavelength"], []],
     output_core_dims=[["wavelength"]],
+    exclude_dims=set(("wavelength",)),
+    keep_attrs=True,
+)
+
+convolve_and_resample_with_errors = partial(
+    xr.apply_ufunc,
+    convolve_and_bin_with_constant_R,
+    input_core_dims=[
+        ["wavelength"],
+        ["wavelength"],
+        ["wavelength"],
+        [],
+        ["wavelength"],
+    ],
+    output_core_dims=[["wavelength"], ["wavelength"]],
     exclude_dims=set(("wavelength",)),
     keep_attrs=True,
 )
@@ -83,3 +108,23 @@ def resample_spectral_quantity_to_new_wavelengths(
     return convolve_and_resample_by_spectres(
         new_wavelengths, model_wavelengths, model_spectral_quantity, fwhm
     ).assign_coords(wavelength=new_wavelengths)
+
+
+def resample_spectral_quantity_with_errors_to_new_wavelengths(
+    new_wavelengths: xr.DataArray,
+    model_wavelengths: xr.DataArray,
+    model_spectral_quantity: xr.DataArray,
+    model_errors: xr.DataArray,
+    new_resolution: Optional[float] = None,
+) -> xr.Dataset:
+    resampled_spectral_quantity, resampled_errors = convolve_and_resample_with_errors(
+        new_wavelengths,
+        model_wavelengths,
+        model_spectral_quantity,
+        new_resolution,
+        model_errors,
+    )
+
+    return resampled_spectral_quantity.assign_coords(
+        wavelength=new_wavelengths
+    ), resampled_errors.assign_coords(wavelength=new_wavelengths)

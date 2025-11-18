@@ -56,6 +56,59 @@ def compile_two_stream_parameters(
     )
 
 
+def compile_gas_two_stream_inputs_by_species(
+    wavelengths_in_cm: xr.DataArray,  # (wavelength,)
+    crosssections: xr.DataArray,  # (species, wavelength, pressure)
+    number_density: xr.DataArray,  # (species, pressure)
+) -> xr.Dataset:
+    scattering_coefficients: TwoStreamScatteringCoefficients = (
+        calculate_two_stream_scattering_components(wavelengths_in_cm, number_density)
+    )
+
+    absorption_coefficients: xr.Dataset = crosssections_to_attenuation_coefficients(
+        crosssections, number_density
+    )
+
+    (
+        cumulative_forward_scattering_coefficients,
+        cumulative_backward_scattering_coefficients,
+    ) = (
+        scattering_coefficients.forward_scattering_coefficients,
+        scattering_coefficients.backward_scattering_coefficients,
+    )
+
+    cumulative_absorption_coefficients: xr.DataArray = (
+        absorption_coefficients
+        # + cumulative_forward_scattering_coefficients
+        # + cumulative_backward_scattering_coefficients
+    )
+
+    return xr.Dataset(
+        {
+            "forward_scattering_coefficients": cumulative_forward_scattering_coefficients,
+            "backward_scattering_coefficients": cumulative_backward_scattering_coefficients,
+            "absorption_coefficients": cumulative_absorption_coefficients,
+        }
+    )
+
+
+def compile_gas_two_stream_inputs(
+    wavelengths_in_cm: xr.DataArray,  # (wavelength,)
+    crosssections: xr.DataArray,  # (species, wavelength, pressure)
+    number_density: xr.DataArray,  # (species, pressure)
+) -> xr.Dataset:
+    gas_two_stream_inputs_by_species: xr.Dataset = (
+        compile_gas_two_stream_inputs_by_species(
+            wavelengths_in_cm, crosssections, number_density
+        )
+    )
+
+    gas_two_stream_inputs_by_species.to_netcdf("gas_two_stream_inputs_by_species.nc")
+
+    return gas_two_stream_inputs_by_species.sum("species")
+
+
+"""
 def compile_gas_two_stream_inputs(
     wavelengths_in_cm: xr.DataArray,  # (wavelength,)
     crosssections: xr.DataArray,  # (species, wavelength, pressure)
@@ -90,6 +143,7 @@ def compile_gas_two_stream_inputs(
             "absorption_coefficients": cumulative_absorption_coefficients,
         }
     )
+"""
 
 
 def compile_composite_two_stream_parameters_with_gas_only(

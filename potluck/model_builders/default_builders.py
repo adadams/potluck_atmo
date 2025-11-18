@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final, Optional, TypeAlias
 
@@ -15,6 +16,7 @@ from potluck.basic_types import (
     PressureDimension,
 )
 from potluck.calculate_RT import (
+    calculate_emitted_fluxes_without_clouds_via_two_stream,
     calculate_observed_fluxes_with_clouds_via_two_stream,
     calculate_observed_fluxes_without_clouds_via_one_stream,
     calculate_observed_fluxes_without_clouds_via_two_stream,
@@ -130,6 +132,59 @@ class EvenlyLogSpacedPressureProfileInputs(msgspec.Struct):
     units: str
     number_of_levels: int
     additional_attributes: Optional[AttrsType] = msgspec.field(default_factory=dict)
+
+
+@dataclass
+class ArbitraryPressureProfileInputs:
+    log10_pressures: np.ndarray[np.float64]
+    units: str
+    additional_attributes: Optional[AttrsType] = field(default_factory=dict)
+
+
+def build_pressure_profile_from_arbitrary_log_pressures(
+    arbitrary_pressure_profile_inputs: ArbitraryPressureProfileInputs,
+) -> PressureProfile:
+    log_pressures_by_level: np.ndarray = (
+        arbitrary_pressure_profile_inputs.log10_pressures
+    )
+
+    pressures_by_level: np.ndarray = 10**log_pressures_by_level
+
+    pressures_by_level_in_cgs: np.ndarray = (
+        pressures_by_level
+        * ureg(arbitrary_pressure_profile_inputs.units).to("barye").magnitude
+    )
+
+    log_pressures_by_level_in_cgs: np.ndarray = np.log10(pressures_by_level_in_cgs)
+
+    additional_attributes: dict[str, Any] = (
+        arbitrary_pressure_profile_inputs.additional_attributes
+        if arbitrary_pressure_profile_inputs.additional_attributes is not None
+        else {}
+    )
+
+    pressures_by_level_as_xarray: xr.DataArray = xr.DataArray(
+        name="pressure",
+        data=jnp.array(pressures_by_level_in_cgs),
+        dims=("pressure",),
+        attrs={"units": "barye"},
+    )
+
+    log_pressures_by_level_as_xarray: xr.DataArray = xr.DataArray(
+        name="log10_pressure",
+        data=jnp.array(log_pressures_by_level_in_cgs),
+        dims=("pressure",),
+        coords={"pressure": pressures_by_level_as_xarray},
+        attrs={"units": "log10(barye)"},
+    )
+
+    pressure_profile_dataset: xr.Dataset = xr.Dataset(
+        data_vars={"log_pressures_by_level": log_pressures_by_level_as_xarray},
+        coords={"pressure": pressures_by_level_as_xarray},
+        attrs=additional_attributes,
+    )
+
+    return pressure_profile_dataset
 
 
 # @cache
@@ -835,6 +890,33 @@ def build_forward_model_with_clouds(
     )
 
     return atmospheric_model
+
+
+def calculate_emission_at_surface_without_clouds(
+    forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
+) -> float:
+    emission_fluxes = calculate_emitted_fluxes_without_clouds_via_two_stream(
+        forward_model_inputs=forward_model_inputs
+    )
+
+    reference_model_wavelengths: xr.DataArray = forward_model_inputs[
+        "observable_parameters"
+    ].wavelength
+
+    emission_fluxes_sampled_to_data: xr.DataArray = (
+        resample_spectral_quantity_to_new_wavelengths(
+            reference_model_wavelengths,
+            emission_fluxes.wavelength,
+            emission_fluxes,
+            fwhm=resampling_fwhm_fraction,
+            # * (
+            #    reference_model_wavelengths.to_numpy()[-1]
+            #    - reference_model_wavelengths.to_numpy()[-2]
+            # ),
+        )
+    ).rename("resampled_emission_flux")
+
+    return emission_fluxes_sampled_to_data
 
 
 def calculate_emission_model_without_clouds(

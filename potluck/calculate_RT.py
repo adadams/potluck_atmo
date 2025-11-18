@@ -292,6 +292,67 @@ def calculate_observed_fluxes_with_clouds_via_two_stream(
     return observed_twostream_flux
 
 
+def calculate_emitted_fluxes_without_clouds_via_two_stream(
+    forward_model_inputs: xr.DataTree,
+) -> xr.DataArray:
+    temperatures_by_level: xr.DataArray = forward_model_inputs[
+        "temperature_profile_by_level"
+    ].temperature
+
+    atmospheric_structure_by_layer: xr.DataArray = forward_model_inputs[
+        "atmospheric_structure_by_layer"
+    ]
+
+    vertical_structure_by_layer: xr.DataArray = atmospheric_structure_by_layer[
+        "vertical_structure"
+    ]
+
+    number_densities_by_layer: xr.DataArray = (
+        atmospheric_structure_by_layer["gas_number_densities"]
+        .to_dataset()
+        .to_dataarray(dim="species")
+    )
+
+    gas_crosssection_catalog: xr.Dataset = forward_model_inputs["reference_data"][
+        "gas_crosssection_catalog"
+    ].to_dataset()
+
+    gas_crosssection_catalog_as_dataarray: xr.DataArray = (
+        gas_crosssection_catalog.to_array(dim="species", name="crosssections")
+    )
+
+    model_wavelengths_in_cm: xr.DataArray = gas_crosssection_catalog.wavelength
+
+    thermal_intensities: xr.Dataset = compile_thermal_structure_for_forward_model(
+        temperatures_by_level=temperatures_by_level,
+        model_wavelengths_in_cm=model_wavelengths_in_cm,
+    )
+
+    path_lengths_in_cm: xr.DataArray = vertical_structure_by_layer.path_lengths
+
+    # TODO: there is probably a way to extend "set_result_name_and_units" so we can remove the tuple/class-like return structures
+    two_stream_parameters: TwoStreamParameters = (
+        compile_composite_two_stream_parameters_with_gas_only(
+            wavelengths_in_cm=model_wavelengths_in_cm,
+            crosssections=gas_crosssection_catalog_as_dataarray,
+            number_density=number_densities_by_layer,
+            path_lengths=path_lengths_in_cm,
+        )
+    )
+
+    RT_Toon1989_inputs: RTToon1989Inputs = RTToon1989Inputs(
+        thermal_intensity=thermal_intensities.thermal_intensity_by_layer,
+        delta_thermal_intensity=thermal_intensities.delta_thermal_intensity_by_layer,
+        **asdict(two_stream_parameters),
+    )
+
+    emitted_twostream_flux: xr.DataArray = RT_Toon1989(
+        *astuple(RT_Toon1989_inputs)
+    ).rename("emitted_twostream_flux")
+
+    return emitted_twostream_flux
+
+
 def calculate_observed_fluxes_without_clouds_via_two_stream(
     forward_model_inputs: xr.DataTree,
 ) -> xr.DataArray:

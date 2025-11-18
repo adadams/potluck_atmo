@@ -24,4 +24,4 @@ echo running $(which python) ...
 echo -n "running "
 
 cd $HOME/potluck
-mpiexec -n $SLURM_NTASKS python -m mpi4py.futures $HOME/potluck/user/Ross458c_cloudy/run_Na2S_retrieval_on_cluster.py > $HOME/storage/logs/Ross458c_Na2S_clouds_retrieval_2025-10-01_test.log
+mpiexec -n $SLURM_NTASKS python -m mpi4py.futures $HOME/potluck/user/Ross458c_cloudy/run_Na2S_retrieval_on_cluster_shallow.py > $HOME/storage/logs/Ross458c_Na2S_clouds_retrieval_2025-10-07_test.log

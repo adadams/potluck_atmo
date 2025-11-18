@@ -104,15 +104,6 @@ def RT_Toon1989(
     stream_cosine_angles: np.ndarray[np.float64],
     stream_weights: np.ndarray[np.float64],
 ) -> np.ndarray[np.float64]:
-    print(
-        f"{np.min(scattering_asymmetry_parameter)=}, {np.max(scattering_asymmetry_parameter)=}"
-    )
-    print(f"{np.min(single_scattering_albedo)=}, {np.max(single_scattering_albedo)=}")
-    print(f"{np.min(thermal_intensity)=}, {np.max(thermal_intensity)=}")
-    print(f"{np.min(delta_thermal_intensity)=}, {np.max(delta_thermal_intensity)=}")
-    print(f"{np.max(delta_thermal_intensity/thermal_intensity)=}")
-    print(f"{np.min(optical_depth)=}, {np.max(optical_depth)=}")
-
     terms_for_DSolver = calculate_terms_for_DSolver(
         optical_depth,
         single_scattering_albedo,

@@ -1,7 +1,10 @@
+import sys
 from collections.abc import Callable
 from functools import partial
+from pathlib import Path
 from typing import TypeVar
 
+sys.path.append(str(Path(__file__).parent.parent.parent))
 import numpy as np
 from msgspec.structs import astuple
 from scipy.interpolate import PchipInterpolator as monotonic_interpolation
@@ -41,6 +44,17 @@ class PietteTemperatureModelSamples(TemperatureModelSamples):
     scaled_temperature_30bar: NormalizedValue
     scaled_temperature_100bar: NormalizedValue
     scaled_temperature_300bar: NormalizedValue
+
+
+class PietteRossTemperatureModelSamples(TemperatureModelSamples):
+    photospheric_temperature_3bar: TemperatureValue
+    scaled_temperature_1bar: NormalizedValue
+    scaled_temperature_0p1bar: NormalizedValue
+    scaled_temperature_0p01bar: NormalizedValue
+    scaled_temperature_0p001bar: NormalizedValue
+    scaled_temperature_10bar: NormalizedValue
+    scaled_temperature_30bar: NormalizedValue
+    scaled_temperature_100bar: NormalizedValue
 
 
 # @njit
@@ -231,8 +245,18 @@ def general_piette_function(
         np.ndarray[(NumberofModelPressures,), TemperatureValue],
     ] = monotonic_interpolation(log_pressure_nodes, temperature_nodes)
 
+    test_smoothing_parameter: float = round(
+        smoothing_parameter
+        / (
+            (np.max(log_pressure_nodes) - np.min(log_pressure_nodes))
+            / len(profile_log_pressures)
+        )
+    )
+
     TP_profile = gaussian_smoothing(
-        interpolated_function(profile_log_pressures), sigma=smoothing_parameter
+        interpolated_function(profile_log_pressures),
+        sigma=test_smoothing_parameter,
+        mode="nearest",
     )
 
     return TP_profile
