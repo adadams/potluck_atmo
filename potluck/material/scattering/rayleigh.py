@@ -73,19 +73,38 @@ def calculate_two_stream_scattering_components(
     number_density: xr.DataArray,
     # reference_frequency: float = REFERENCE_FREQUENCY_IN_HZ,
 ) -> TwoStreamScatteringCoefficients:
-    rayleigh_scattering_crosssections: xr.DataArray = (
-        calculate_H2_rayleigh_scattering_crosssections_in_cm2(
-            wavelengths_in_angstroms=wavelengths_in_cm * 1e8
+    if "h2" in number_density.species:
+        rayleigh_scattering_crosssections: xr.DataArray = (
+            calculate_H2_rayleigh_scattering_crosssections_in_cm2(
+                wavelengths_in_angstroms=wavelengths_in_cm * 1e8
+            )
         )
-    )
 
-    rayleigh_scattering_attenuation_coefficients: xr.DataArray = (
-        calculate_rayleigh_scattering_attenuation_coefficients(
-            wavelengths_in_cm,
-            rayleigh_scattering_crosssections,
-            number_density.sel(species=["h2"]),
+        rayleigh_scattering_attenuation_coefficients: xr.DataArray = (
+            calculate_rayleigh_scattering_attenuation_coefficients(
+                wavelengths_in_cm,
+                rayleigh_scattering_crosssections,
+                number_density.sel(species=["h2"]),
+            )
         )
-    )
+
+    # TODO: this is technically a hard-coding of a fixed H2/He molar ratio.
+    elif "h2he" in number_density.species:
+        rayleigh_scattering_crosssections: xr.DataArray = (
+            0.83
+            * calculate_H2_rayleigh_scattering_crosssections_in_cm2(
+                wavelengths_in_angstroms=wavelengths_in_cm * 1e8
+            )
+        )
+
+        rayleigh_scattering_attenuation_coefficients: xr.DataArray = (
+            0.83
+            * calculate_rayleigh_scattering_attenuation_coefficients(
+                wavelengths_in_cm,
+                rayleigh_scattering_crosssections,
+                number_density.sel(species=["h2he"]),
+            )
+        )
 
     forward_scattering_attentuation_coefficients: float | np.ndarray[np.float64] = (
         0.5 * rayleigh_scattering_attenuation_coefficients

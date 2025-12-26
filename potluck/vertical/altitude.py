@@ -18,6 +18,8 @@ from potluck.xarray_functional_wrappers import (
 
 
 def convert_coordinate_by_level_to_by_layer(coordinate: xr.DataArray) -> xr.DataArray:
+    # This assumes the levels are evenly spaced in log pressure, hence the geometric mean.
+
     midlayer_values: np.ndarray = np.sqrt(
         coordinate.to_numpy()[1:] * coordinate.to_numpy()[:-1]
     )
@@ -113,7 +115,7 @@ def convert_datatree_by_pressure_levels_to_pressure_layers(
     )
 
 
-@set_result_name_and_units(new_name="path_length", units="cm")
+@set_result_name_and_units(result_names="path_length", units="cm")
 def altitudes_by_level_to_path_lengths(
     altitudes_by_level: xr.DataArray,
 ) -> xr.DataArray:
@@ -124,7 +126,7 @@ def altitudes_by_level_to_by_layer(altitudes_by_level: xr.DataArray) -> xr.DataA
     return convert_dataarray_by_pressure_levels_to_pressure_layers(altitudes_by_level)
 
 
-@set_result_name_and_units(new_name="altitude", units="cm")
+@set_result_name_and_units(result_names="altitude", units="cm")
 @Dimensionalize(
     argument_dimensions=(
         (PressureDimension,),
@@ -169,7 +171,7 @@ def calculate_altitude_profile(
     return jnp.append(jnp.array([0.0]), altitudes)[::-1]
 
 
-@set_result_name_and_units(new_name="altitude", units="cm")
+@set_result_name_and_units(result_names="altitude", units="cm")
 @Dimensionalize(
     argument_dimensions=(
         (PressureDimension,),

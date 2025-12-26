@@ -8,6 +8,8 @@ from potluck.material.absorbing.from_crosssections import (
     crosssections_to_attenuation_coefficients,
 )
 from potluck.material.clouds.cloud_metrics import (
+    calculate_power_law_cloud_two_stream_parameters_across_wavelengths,
+    calculate_power_law_cloud_two_stream_parameters_at_reference_wavelength,
     compute_cloud_log_normal_particle_distribution_opacities,
 )
 from potluck.material.scattering.rayleigh import (
@@ -103,8 +105,6 @@ def compile_gas_two_stream_inputs(
         )
     )
 
-    gas_two_stream_inputs_by_species.to_netcdf("gas_two_stream_inputs_by_species.nc")
-
     return gas_two_stream_inputs_by_species.sum("species")
 
 
@@ -164,6 +164,55 @@ def compile_composite_two_stream_parameters_with_gas_only(
     )
 
 
+def compile_composite_two_stream_parameters_with_gas_and_power_law_clouds(
+    wavelengths_in_cm: xr.DataArray,  # (wavelength,)
+    gas_crosssections: xr.DataArray,  # (species, wavelength, pressure)
+    gas_number_density: xr.DataArray,  # (species, pressure))
+    path_lengths: xr.DataArray,  # (pressure,)
+    power_law_cloud_profiles: xr.Dataset,  # each array is a cloud profile, with (pressure,)
+) -> TwoStreamParameters:
+    gas_two_stream_inputs: xr.Dataset = compile_gas_two_stream_inputs(
+        wavelengths_in_cm, gas_crosssections, gas_number_density
+    )
+
+    cloud_two_stream_parameters_by_slab: list[xr.Dataset] = [
+        xr.merge(
+            calculate_power_law_cloud_two_stream_parameters_at_reference_wavelength(
+                cloud_profile,
+                path_lengths,
+                cloud_profile.attrs["single_scattering_albedo"],
+            )
+        )
+        for cloud_profile in power_law_cloud_profiles.data_vars.values()
+    ]
+
+    cumulative_cloud_two_stream_inputs_by_slab: xr.Dataset = [
+        xr.merge(
+            calculate_power_law_cloud_two_stream_parameters_across_wavelengths(
+                cloud_two_stream_parameters.cloud_forward_scattering_coefficients,
+                cloud_two_stream_parameters.cloud_backward_scattering_coefficients,
+                cloud_two_stream_parameters.cloud_absorption_coefficients,
+                cloud_profile.attrs["power_law_exponent"],
+                wavelengths_in_cm,
+                cloud_profile.attrs["reference_wavelength_in_microns"],
+            )
+        )
+        for cloud_profile, cloud_two_stream_parameters in zip(
+            power_law_cloud_profiles.data_vars.values(),
+            cloud_two_stream_parameters_by_slab,
+        )
+    ]
+
+    cumulative_cloud_two_stream_inputs: xr.Dataset = xr.concat(
+        cumulative_cloud_two_stream_inputs_by_slab, dim="cloud_slab"
+    ).sum("cloud_slab")
+    # cumulative_cloud_two_stream_inputs.to_netcdf("power_law_cloud_two_stream_inputs_at_reference_wavelength.nc")
+
+    return compile_composite_two_stream_parameters(
+        [gas_two_stream_inputs, cumulative_cloud_two_stream_inputs], path_lengths
+    )
+
+
 def compile_composite_two_stream_parameters_with_gas_and_clouds(
     wavelengths_in_cm: xr.DataArray,  # (wavelength,)
     gas_crosssections: xr.DataArray,  # (species, wavelength, pressure)
@@ -175,7 +224,7 @@ def compile_composite_two_stream_parameters_with_gas_and_clouds(
     gas_two_stream_inputs: xr.Dataset = compile_gas_two_stream_inputs(
         wavelengths_in_cm, gas_crosssections, gas_number_density
     )
-    gas_two_stream_inputs.to_netcdf("gas_two_stream_inputs.nc")
+    # gas_two_stream_inputs.to_netcdf("gas_two_stream_inputs.nc")
 
     for cloud_species in cloud_crosssections.children:
         cloud_crosssections_for_species: xr.DataArray = cloud_crosssections[
@@ -242,7 +291,7 @@ def compile_composite_two_stream_parameters_with_gas_and_clouds(
                 "absorption_coefficients": cloud_absorption_dataarray,
             }
         )
-        cloud_two_stream_inputs.to_netcdf("cloud_two_stream_inputs.nc")
+        # cloud_two_stream_inputs.to_netcdf("cloud_two_stream_inputs.nc")
 
     return compile_composite_two_stream_parameters(
         [gas_two_stream_inputs, cloud_two_stream_inputs], path_lengths

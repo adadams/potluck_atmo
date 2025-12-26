@@ -86,7 +86,9 @@ class RTToon1989Inputs:
     )
 
 
-@set_result_name_and_units(new_name="emitted_twostream_flux", units="erg s^-1 cm^-3")
+@set_result_name_and_units(
+    result_names="emitted_twostream_flux", units="erg s^-1 cm^-3"
+)
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthDimension, PressureDimension),

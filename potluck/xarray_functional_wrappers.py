@@ -1,4 +1,4 @@
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import partial, reduce, wraps
 from inspect import signature
@@ -180,19 +180,40 @@ def call_meshgrid_on_xarray(
 
 @function_decorator
 def set_result_name_and_units(
-    new_name: str | Mapping[str, str],
-    units: str | Mapping[str, str],
+    result_names: str | Iterable[str] | Mapping[str, str],
+    units: str | Iterable[str] | Mapping[str, str],
     function=DECORATED,
 ) -> Callable:
     @wraps(function)
     def wrapper(*args, **kwargs):
         result = function(*args, **kwargs)
+
         if isinstance(result, xr.DataArray):
-            result = result.rename(new_name).assign_attrs(units=units)
-        elif isinstance(result, xr.Dataset):
-            result = result.rename({var: new_name[var] for var in result.data_vars})
-            for var in result.data_vars:
-                result[var].attrs["units"] = units[var]
+            result_name = result_names
+
+            result = result.rename(result_name).assign_attrs(units=units)
+
+        elif isinstance(result, tuple):
+            if any(not isinstance(dataarray, xr.DataArray) for dataarray in result):
+                raise TypeError(
+                    "All elements must be of type xarray DataArray. ",
+                    "This may be because the wrapped function is not returning a tuple of dataarrays.",
+                )
+            # as in the result of a function that returns a tuple of dataarrays
+
+            # check that the length of new_name and units are the same as the length of the tuple
+            if len(result_names) != len(units) != len(result):
+                raise ValueError(
+                    "The number of variable names and units for the result of the function must be the same."
+                )
+
+            result = tuple(
+                dataarray.rename(result_name).assign_attrs(units=result_unit)
+                for dataarray, result_name, result_unit in zip(
+                    result, result_names, units
+                )
+            )
+
         return result
 
     return wrapper

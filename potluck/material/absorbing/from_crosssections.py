@@ -4,7 +4,7 @@ from potluck.basic_types import PressureDimension, SpeciesDimension, WavelengthD
 from potluck.xarray_functional_wrappers import Dimensionalize, set_result_name_and_units
 
 
-@set_result_name_and_units(new_name="attenuation_coefficients", units="cm^-1")
+@set_result_name_and_units(result_names="attenuation_coefficients", units="cm^-1")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthDimension, PressureDimension, SpeciesDimension),
@@ -19,7 +19,7 @@ def crosssections_to_attenuation_coefficients(
     return crosssections * number_density
 
 
-@set_result_name_and_units(new_name="optical_depth", units="dimensionless")
+@set_result_name_and_units(result_names="optical_depth", units="dimensionless")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthDimension, PressureDimension),
@@ -34,7 +34,7 @@ def attenuation_coefficients_to_optical_depths(
     return attenuation_coefficients * path_length
 
 
-@set_result_name_and_units(new_name="optical_depth", units="dimensionless")
+@set_result_name_and_units(result_names="optical_depth", units="dimensionless")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthDimension, SpeciesDimension, PressureDimension),

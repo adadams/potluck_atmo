@@ -20,6 +20,8 @@ METAL_MOLECULAR_WEIGHTS: Final[dict[str, float]] = {
     "h2o": 18.02,
     "ch4": 16.04,
     "co": 28.01,
+    "12co": 28.01,
+    "13co": 29.00,
     "co2": 44.01,
     "nh3": 17.03,
     "h2s": 34.07,

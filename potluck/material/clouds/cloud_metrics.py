@@ -8,9 +8,17 @@ import numpy as np
 import xarray as xr
 from jax import numpy as jnp
 
+from potluck.xarray_functional_wrappers import Dimensionalize, set_result_name_and_units
+
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
-from potluck.basic_types import LogMixingRatioValue, NormalizedValue
+from potluck.basic_types import (
+    LogMixingRatioValue,
+    NonnegativeValue,
+    NormalizedValue,
+    PressureDimension,
+    WavelengthDimension,
+)
 from potluck.material.mixing_ratios import (
     calculate_uniform_mixing_ratios_in_slab_multi_layer,
     calculate_uniform_mixing_ratios_in_slab_single_layer,
@@ -96,6 +104,126 @@ def convert_fraction_of_remaining_pressures_to_level_index(
     )
 
 
+@set_result_name_and_units(
+    result_names=(
+        "forward_scattering_coefficients",
+        "backward_scattering_coefficients",
+        "absorption_coefficients",
+    ),
+    units=tuple(["cm^-1"] * 3),
+)
+@Dimensionalize(
+    argument_dimensions=(
+        (PressureDimension,),
+        (PressureDimension,),
+        (PressureDimension,),
+        None,
+        (WavelengthDimension,),
+        None,
+    ),
+    result_dimensions=(
+        (WavelengthDimension, PressureDimension),
+        (WavelengthDimension, PressureDimension),
+        (WavelengthDimension, PressureDimension),
+    ),
+)
+def calculate_power_law_cloud_two_stream_parameters_across_wavelengths(
+    cloud_forward_scattering_coefficients_at_reference_wavelength_by_layer: np.ndarray,
+    cloud_backward_scattering_coefficients_at_reference_wavelength_by_layer: np.ndarray,
+    cloud_absorption_coefficients_at_reference_wavelength_by_layer: np.ndarray,
+    power_law_exponent: float,
+    wavelengths_in_cm: np.ndarray[NonnegativeValue],
+    reference_wavelength_in_microns: NonnegativeValue = 1.00,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    reference_wavelength_in_cm: float = reference_wavelength_in_microns * 1e-4
+
+    power_law_multiplicative_factors: np.ndarray = (
+        (wavelengths_in_cm / reference_wavelength_in_cm) ** power_law_exponent
+    )[:, None]  # (n_wavelengths, n_layers)
+
+    return (
+        cloud_absorption_coefficients_at_reference_wavelength_by_layer
+        * power_law_multiplicative_factors,
+        cloud_forward_scattering_coefficients_at_reference_wavelength_by_layer
+        * power_law_multiplicative_factors,
+        cloud_backward_scattering_coefficients_at_reference_wavelength_by_layer
+        * power_law_multiplicative_factors,
+    )
+
+
+@set_result_name_and_units(
+    result_names=(
+        "cloud_forward_scattering_coefficients",
+        "cloud_backward_scattering_coefficients",
+        "cloud_absorption_coefficients",
+    ),
+    units=tuple(["cm^-1"] * 3),
+)
+@Dimensionalize(
+    argument_dimensions=(
+        (PressureDimension,),
+        (PressureDimension,),
+        None,
+        # None,
+    ),
+    result_dimensions=(
+        (PressureDimension,),
+        (PressureDimension,),
+        (PressureDimension,),
+    ),
+)
+def calculate_power_law_cloud_two_stream_parameters_at_reference_wavelength(
+    cloud_optical_depths_at_reference_wavelength_by_layer: np.ndarray,
+    path_lengths_by_layer: np.ndarray,
+    uniform_single_scattering_albedo: NormalizedValue,
+    uniform_asymmetry_parameter: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    fraction_of_extinction_in_scattering: NormalizedValue = (
+        uniform_single_scattering_albedo
+    )
+    fraction_of_extinction_in_absorption: NormalizedValue = (
+        1 - uniform_single_scattering_albedo
+    )
+
+    # forward scattering, backward scattering, absorption
+    cloud_extinction_coefficients_at_reference_wavelength_by_layer: np.ndarray = (
+        cloud_optical_depths_at_reference_wavelength_by_layer / path_lengths_by_layer
+    )
+
+    cloud_absorption_coefficients_at_reference_wavelength_by_layer: np.ndarray = (
+        cloud_extinction_coefficients_at_reference_wavelength_by_layer
+        * fraction_of_extinction_in_absorption
+    )
+
+    cloud_total_scattering_coefficients_at_reference_wavelength_by_layer: np.ndarray = (
+        cloud_extinction_coefficients_at_reference_wavelength_by_layer
+        * fraction_of_extinction_in_scattering
+    )
+
+    fraction_of_scattering_in_forward_direction: NormalizedValue = (
+        1 + uniform_asymmetry_parameter
+    ) / 2
+    fraction_of_scattering_in_backward_direction: NormalizedValue = (
+        1 - uniform_asymmetry_parameter
+    ) / 2
+
+    cloud_forward_scattering_coefficients_at_reference_wavelength_by_layer: np.ndarray = (
+        fraction_of_scattering_in_forward_direction
+        * cloud_total_scattering_coefficients_at_reference_wavelength_by_layer
+    )
+
+    cloud_backward_scattering_coefficients_at_reference_wavelength_by_layer: np.ndarray = (
+        fraction_of_scattering_in_backward_direction
+        * cloud_total_scattering_coefficients_at_reference_wavelength_by_layer
+    )
+
+    return (
+        cloud_forward_scattering_coefficients_at_reference_wavelength_by_layer,
+        cloud_backward_scattering_coefficients_at_reference_wavelength_by_layer,
+        cloud_absorption_coefficients_at_reference_wavelength_by_layer,
+    )
+
+
 def calculate_cloud_mixing_ratios_by_layer(
     log10_uniform_cloud_mixing_ratio: LogMixingRatioValue,
     cloud_top_log10_pressure: float,
@@ -172,7 +300,7 @@ def compute_cloud_log_normal_particle_distribution_opacities(
     clouds_absorption_opacities,
     clouds_scattering_opacities,
     clouds_particles_asymmetry_parameters,
-):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     r"""This function reimplements calc_cloud_opas from fortran_radtrans_core.f90 in JAX.
     This is the petitRADTRANS implementation with minor changes to use
     number densities instead of mass densities.

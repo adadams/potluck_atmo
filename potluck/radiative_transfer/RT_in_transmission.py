@@ -6,7 +6,7 @@ from potluck.basic_types import PressureDimension, WavelengthDimension
 from potluck.xarray_functional_wrappers import Dimensionalize, set_result_name_and_units
 
 
-@set_result_name_and_units(new_name="transit_depth", units="dimensionless")
+@set_result_name_and_units(result_names="transit_depth", units="dimensionless")
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthDimension, PressureDimension),

@@ -94,6 +94,16 @@ def get_wavelengths_from_wavelength_bins(wavelength_bin_starts, wavelength_bin_e
     return (wavelength_bin_starts + wavelength_bin_ends) / 2
 
 
+def calculate_mean_resolution(wavelengths: xr.DataArray):
+    inbetween_wavelengths: xr.DataArray = (
+        wavelengths.rolling(wavelength=2).mean().dropna("wavelength")
+    )
+
+    wavelength_spacings: xr.DataArray = wavelengths.diff("wavelength")
+
+    return (inbetween_wavelengths / wavelength_spacings).mean().item()
+
+
 if __name__ == "__main__":
     test_wavelength_coordinate: np.ndarray[np.float64] = build_wavelength_array(
         minimum_wavelength=0.8,

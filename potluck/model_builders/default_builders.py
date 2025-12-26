@@ -7,10 +7,13 @@ import msgspec
 import numpy as np
 import xarray as xr
 from jax import numpy as jnp
+from msgspec.structs import asdict
 from pint import UnitRegistry
 
 from potluck.basic_types import (
     LogMixingRatioValue,
+    LogPressureValue,
+    NonnegativeValue,
     NormalizedValue,
     PositiveValue,
     PressureDimension,
@@ -18,7 +21,7 @@ from potluck.basic_types import (
 from potluck.calculate_RT import (
     calculate_emitted_fluxes_without_clouds_via_two_stream,
     calculate_observed_fluxes_with_clouds_via_two_stream,
-    calculate_observed_fluxes_without_clouds_via_one_stream,
+    calculate_observed_fluxes_with_power_law_clouds_via_two_stream,
     calculate_observed_fluxes_without_clouds_via_two_stream,
     calculate_observed_transmission_spectrum,
 )
@@ -35,10 +38,14 @@ from potluck.material.clouds.cloud_metrics import (
 from potluck.material.gases.molecular_metrics import (
     calculate_mean_molecular_weight,
     calculate_total_number_density,
-    mixing_ratios_to_number_densities,
+    mixing_ratios_to_number_densities_by_species,
 )
 from potluck.material.mixing_ratios import (
+    TwoLevelGasChemistryInputs,
     UniformLogMixingRatios,
+    calculate_single_filler_species_mixing_ratios_by_level,
+    convert_two_level_mixing_ratios_by_species_from_levels_to_layers,
+    generate_two_level_mixing_ratios_by_level,
     generate_uniform_mixing_ratios,
 )
 from potluck.spectrum.bin import resample_spectral_quantity_to_new_wavelengths
@@ -75,6 +82,7 @@ PressureProfile: TypeAlias = xr.Dataset
 TemperatureProfile: TypeAlias = xr.Dataset
 GasChemistryProfile: TypeAlias = xr.Dataset
 CloudChemistryProfile: TypeAlias = xr.Dataset
+CloudPrescribedProfile: TypeAlias = xr.Dataset
 
 
 class DefaultFundamentalParameterInputs(msgspec.Struct):
@@ -187,7 +195,6 @@ def build_pressure_profile_from_arbitrary_log_pressures(
     return pressure_profile_dataset
 
 
-# @cache
 def build_pressure_profile_from_log_pressures(
     pressure_profile_inputs: EvenlyLogSpacedPressureProfileInputs,
 ) -> PressureProfile:
@@ -235,8 +242,103 @@ def build_pressure_profile_from_log_pressures(
     return pressure_profile_dataset
 
 
+class LDwarfFreeGasChemistryInputs(msgspec.Struct):
+    uniform_log_mixing_ratios: UniformLogMixingRatios
+    two_level_log_mixing_ratios: TwoLevelGasChemistryInputs
+    filler_species: Optional[str] = None
+    additional_attributes: Optional[AttrsType] = msgspec.field(default_factory=dict)
+
+
+def build_LDwarf_gas_chemistry(
+    gas_chemistry_inputs: LDwarfFreeGasChemistryInputs,
+    pressure_profile: PressureProfile,
+) -> GasChemistryProfile:
+    filler_species: str = gas_chemistry_inputs.filler_species
+
+    uniform_log_mixing_ratios: UniformLogMixingRatios = (
+        gas_chemistry_inputs.uniform_log_mixing_ratios
+    )
+
+    number_of_pressure_levels: int = len(pressure_profile.pressure)
+
+    uniform_mixing_ratios_by_level: dict[str, np.ndarray[np.float64]] = (
+        generate_uniform_mixing_ratios(
+            uniform_log_abundances=uniform_log_mixing_ratios,
+            number_of_pressure_levels=number_of_pressure_levels,
+            filler_species=None,  # wait to add filler until both kinds of gas prescriptions are included
+        )
+    )
+
+    uniform_mixing_ratios_by_level_as_xarray: xr.Dataset = xr.Dataset(
+        data_vars={
+            mixing_ratio_name: xr.DataArray(
+                data=uniform_mixing_ratio_by_layer,
+                dims=("pressure",),
+                attrs={"units": "mol/mol"},
+            )
+            for mixing_ratio_name, uniform_mixing_ratio_by_layer in uniform_mixing_ratios_by_level.items()
+        },
+        coords={"pressure": pressure_profile.pressure},
+    )
+
+    two_level_log_mixing_ratio_inputs: TwoLevelGasChemistryInputs = (
+        gas_chemistry_inputs.two_level_log_mixing_ratios
+    )
+
+    two_level_mixing_ratios_by_level: dict[str, np.ndarray[np.float64]] = (
+        generate_two_level_mixing_ratios_by_level(
+            two_level_gas_inputs=two_level_log_mixing_ratio_inputs,
+            log10_pressures_by_level=pressure_profile.log_pressures_by_level,
+        )
+    )
+
+    two_level_mixing_ratios_by_level_as_xarray: xr.Dataset = xr.Dataset(
+        data_vars={
+            species_name: xr.DataArray(
+                data=mixing_ratio_by_level,
+                dims=("pressure",),
+                attrs={
+                    "units": "mol/mol",
+                    **asdict(two_level_log_mixing_ratio_inputs[species_name]),
+                },
+            )
+            for species_name, mixing_ratio_by_level in two_level_mixing_ratios_by_level.items()
+        },
+        coords={"pressure": pressure_profile.pressure},
+    )
+
+    additional_attributes: AttrsType = (
+        gas_chemistry_inputs.additional_attributes
+        if gas_chemistry_inputs.additional_attributes is not None
+        else {}
+    )
+
+    mixing_ratios_by_level_as_xarray: xr.Dataset = xr.merge(
+        [
+            uniform_mixing_ratios_by_level_as_xarray,
+            two_level_mixing_ratios_by_level_as_xarray,
+        ],
+    ).assign_attrs(additional_attributes)
+
+    filler_mixing_ratios_by_level: np.ndarray = (
+        calculate_single_filler_species_mixing_ratios_by_level(
+            existing_mixing_ratios=uniform_mixing_ratios_by_level
+            | two_level_mixing_ratios_by_level
+        )
+    )
+
+    mixing_ratios_by_level_as_xarray[filler_species] = xr.DataArray(
+        data=filler_mixing_ratios_by_level,
+        dims=("pressure",),
+        coords={"pressure": pressure_profile.pressure},
+        attrs={"units": "mol/mol"},
+    )
+
+    return mixing_ratios_by_level_as_xarray
+
+
 class UniformGasChemistryInputs(msgspec.Struct):
-    log_mixing_ratios: UniformLogMixingRatios
+    uniform_log_mixing_ratios: UniformLogMixingRatios
     filler_species: Optional[str] = None
     additional_attributes: Optional[AttrsType] = msgspec.field(default_factory=dict)
 
@@ -244,7 +346,9 @@ class UniformGasChemistryInputs(msgspec.Struct):
 def build_uniform_gas_chemistry(
     gas_chemistry_inputs: UniformGasChemistryInputs, pressure_profile: PressureProfile
 ) -> GasChemistryProfile:
-    log_mixing_ratios: UniformLogMixingRatios = gas_chemistry_inputs.log_mixing_ratios
+    log_mixing_ratios: UniformLogMixingRatios = (
+        gas_chemistry_inputs.uniform_log_mixing_ratios
+    )
     filler_species: str = gas_chemistry_inputs.filler_species
 
     number_of_pressure_levels: int = len(pressure_profile.pressure)
@@ -277,6 +381,138 @@ def build_uniform_gas_chemistry(
     )
 
     return mixing_ratios_by_level_as_xarray
+
+
+class PowerLawSlabCloudInputs(msgspec.Struct):
+    cloud_top_log10_pressure: LogPressureValue
+    cloud_log10_thickness: NonnegativeValue
+    pressure_units: str
+    power_law_exponent: float
+    single_scattering_albedo: NormalizedValue
+    maximum_optical_depth_at_reference_wavelength: NonnegativeValue
+    reference_wavelength_in_microns: NonnegativeValue = 1.00
+
+
+class SingleLayerPowerLawSlabCloudInputs(msgspec.Struct):
+    layer_1: PowerLawSlabCloudInputs
+
+
+MultiplePowerLawSlabCloudInputs: TypeAlias = dict[str, PowerLawSlabCloudInputs]
+
+
+class PowerLawSlabCloudSamples(msgspec.Struct):
+    cloud_top_log10_pressure: LogPressureValue
+    cloud_thickness_relative_to_remaining_pressures: NormalizedValue
+    pressure_units: str
+    power_law_exponent: float
+    single_scattering_albedo: NormalizedValue
+    maximum_optical_depth_at_reference_wavelength: NonnegativeValue
+    reference_wavelength_in_microns: NonnegativeValue = 1.00
+
+
+def create_power_law_cloud_inputs_from_samples(
+    cloud_top_log10_pressure: LogPressureValue,
+    cloud_thickness_relative_to_remaining_pressures: NormalizedValue,
+    pressure_units: str,
+    power_law_exponent: float,
+    single_scattering_albedo: NormalizedValue,
+    maximum_optical_depth_at_reference_wavelength: NonnegativeValue,
+    reference_wavelength_in_microns: NonnegativeValue,
+    maximum_log10_pressure: float,
+) -> PowerLawSlabCloudInputs:
+    cloud_log10_thickness: PositiveValue = (
+        convert_cloud_remaining_fraction_to_thickness(
+            cloud_top_log10_pressure=cloud_top_log10_pressure,
+            cloud_remaining_fraction=cloud_thickness_relative_to_remaining_pressures,
+            maximum_log10_pressure=maximum_log10_pressure,
+        )
+    )
+
+    return PowerLawSlabCloudInputs(
+        cloud_top_log10_pressure=cloud_top_log10_pressure,
+        cloud_log10_thickness=cloud_log10_thickness,
+        pressure_units=pressure_units,
+        power_law_exponent=power_law_exponent,
+        single_scattering_albedo=single_scattering_albedo,
+        maximum_optical_depth_at_reference_wavelength=maximum_optical_depth_at_reference_wavelength,
+        reference_wavelength_in_microns=reference_wavelength_in_microns,
+    )
+
+
+def calculate_power_law_cloud_opacity_at_reference_wavelength(
+    log10_pressures_by_level: xr.DataArray,
+    power_law_slab_cloud_inputs: PowerLawSlabCloudInputs,
+) -> xr.DataArray:
+    cloud_top_pressure: NonnegativeValue = (
+        10**power_law_slab_cloud_inputs.cloud_top_log10_pressure
+    )
+
+    cloud_base_log10_pressure: LogPressureValue = (
+        power_law_slab_cloud_inputs.cloud_top_log10_pressure
+        + power_law_slab_cloud_inputs.cloud_log10_thickness
+    )
+    cloud_base_pressure: NonnegativeValue = 10**cloud_base_log10_pressure
+
+    maximum_optical_depth_at_reference_wavelength: NonnegativeValue = (
+        power_law_slab_cloud_inputs.maximum_optical_depth_at_reference_wavelength
+    )
+
+    cloudy_pressures: xr.DataArray = 10 ** (
+        log10_pressures_by_level.where(
+            (
+                log10_pressures_by_level
+                >= power_law_slab_cloud_inputs.cloud_top_log10_pressure
+            )
+            & (log10_pressures_by_level <= cloud_base_log10_pressure)
+        )
+    )
+
+    cloud_optical_depth_at_reference_wavelength: xr.DataArray = (
+        (
+            maximum_optical_depth_at_reference_wavelength
+            * (
+                (cloudy_pressures**2 - cloud_top_pressure**2)
+                / (cloud_base_pressure**2 - cloud_top_pressure**2)
+            )
+        )
+        .fillna(0.0)
+        .rename("cloud_optical_depth_at_reference_wavelength")
+    ).assign_attrs(
+        units="dimensionless",
+        reference_wavelength_in_microns=power_law_slab_cloud_inputs.reference_wavelength_in_microns,
+        power_law_exponent=power_law_slab_cloud_inputs.power_law_exponent,
+        single_scattering_albedo=power_law_slab_cloud_inputs.single_scattering_albedo,
+    )
+
+    return cloud_optical_depth_at_reference_wavelength
+
+
+def build_power_law_cloud_profiles(
+    multiple_power_law_slab_cloud_inputs: MultiplePowerLawSlabCloudInputs,
+    pressure_profile: PressureProfile,
+) -> CloudPrescribedProfile:
+    # in short, compile a list of profiles at the reference wavelength
+    # then, at some point we will back out the attenutation and scattering
+    # coefficients for the two-stream routine
+
+    multiple_power_law_slab_cloud_inputs_as_dict: dict[str, SlabCloudInputs] = (
+        (msgspec.structs.asdict(multiple_power_law_slab_cloud_inputs))
+        if isinstance(multiple_power_law_slab_cloud_inputs, msgspec.Struct)
+        else multiple_power_law_slab_cloud_inputs
+    )
+
+    cloud_mixing_ratios_by_level: xr.Dataset = xr.Dataset(
+        data_vars={
+            cloud_layer_name: calculate_power_law_cloud_opacity_at_reference_wavelength(
+                log10_pressures_by_level=pressure_profile.log_pressures_by_level,
+                power_law_slab_cloud_inputs=slab_cloud_inputs,
+            )
+            for cloud_layer_name, slab_cloud_inputs in multiple_power_law_slab_cloud_inputs_as_dict.items()
+        },
+        coords=pressure_profile.coords,
+    )
+
+    return cloud_mixing_ratios_by_level
 
 
 class SlabCloudInputs(msgspec.Struct):
@@ -402,7 +638,7 @@ def build_temperature_profile(
     )
 
     temperature_model_for_xarray: TemperatureModel = set_result_name_and_units(
-        new_name="temperature", units="K"
+        result_names="temperature", units="K"
     )(
         Dimensionalize(
             argument_dimensions=((PressureDimension,),),
@@ -463,29 +699,17 @@ def compile_vertical_structure(
         name="vertical_structure", dataset=vertical_structure_by_level
     )
 
-    number_densities_by_level: xr.Dataset = xr.Dataset(
-        data_vars={
-            species: xr.DataArray(
-                data=number_density_array, coords=pressure_profile.coords
-            )
-            for species, number_density_array in mixing_ratios_to_number_densities(
-                mixing_ratios_by_level=gas_chemistry,
-                pressure_in_cgs=pressure_profile.pressure,  #  * BAR_TO_BARYE,
-                temperatures_in_K=temperature_profile,
-            ).items()
-        },
-        coords={"pressure": pressure_profile.pressure},
-        attrs={"units": "cm^-3", **additional_attributes},
-    )
-    number_densities_by_level_node: xr.DataTree = xr.DataTree(
-        name="number_densities", dataset=number_densities_by_level
+    mixing_ratios_by_level: xr.Dataset = gas_chemistry
+
+    mixing_ratios_by_level_node: xr.DataTree = xr.DataTree(
+        name="mixing_ratios", dataset=mixing_ratios_by_level
     )
 
     atmospheric_structure_by_level: xr.DataTree = xr.DataTree(
         name="atmospheric_structure",
         children={
             "vertical_structure": vertical_structure_by_level_node,
-            "gas_number_densities": number_densities_by_level_node,
+            "gas_mixing_ratios": mixing_ratios_by_level_node,
         },
     )
 
@@ -493,6 +717,211 @@ def compile_vertical_structure(
         convert_datatree_by_pressure_levels_to_pressure_layers(
             atmospheric_structure_by_level
         )
+    )
+
+    species_with_discrete_boundaries: list[str] = [
+        species_name
+        for species_name in gas_chemistry.data_vars
+        if "boundary_log_pressure" in gas_chemistry[species_name].attrs
+    ]
+
+    if species_with_discrete_boundaries:
+        for species in species_with_discrete_boundaries:
+            species_mixing_ratios: xr.DataArray = atmospheric_structure_by_layer[
+                "gas_mixing_ratios"
+            ][species]
+
+            species_boundary_log_pressure: float = species_mixing_ratios.attrs[
+                "boundary_log_pressure"
+            ]
+            species_shallow_log_mixing_ratio: float = species_mixing_ratios.attrs[
+                "shallow_log_mixing_ratio"
+            ]
+            species_deep_log_mixing_ratio: float = species_mixing_ratios.attrs[
+                "deep_log_mixing_ratio"
+            ]
+
+            species_mixing_ratio_values: np.ndarray = species_mixing_ratios.values
+
+            # using the values property means the operation is done in place on the underlying array,
+            # so no need to reassign
+            species_mixing_ratio_values: np.ndarray = (
+                convert_two_level_mixing_ratios_by_species_from_levels_to_layers(
+                    species_mixing_ratio_values,
+                    species_shallow_log_mixing_ratio,
+                    species_deep_log_mixing_ratio,
+                    species_boundary_log_pressure,
+                    pressure_profile.log_pressures_by_level,
+                )
+            )
+
+    gas_number_densities_by_layer: xr.Dataset = xr.apply_ufunc(
+        mixing_ratios_to_number_densities_by_species,
+        atmospheric_structure_by_layer["gas_mixing_ratios"],
+        atmospheric_structure_by_layer["vertical_structure"].pressures_by_layer,
+        atmospheric_structure_by_layer["vertical_structure"].temperatures_by_layer,
+        dask="parallelized",
+    )
+
+    for species in gas_number_densities_by_layer.data_vars:
+        gas_number_densities_by_layer[species].attrs = gas_chemistry[species].attrs
+        gas_number_densities_by_layer[species].attrs["units"] = "cm^-3"
+
+    gas_number_densities_by_layer_node: xr.DataTree = xr.DataTree(
+        name="gas_number_densities", dataset=gas_number_densities_by_layer
+    )
+
+    atmospheric_structure_by_layer: xr.DataTree = atmospheric_structure_by_layer.assign(
+        {"gas_number_densities": gas_number_densities_by_layer_node}
+    )
+
+    path_lengths_by_layer_in_cm: xr.DataArray = altitudes_by_level_to_path_lengths(
+        altitudes_by_level_in_cm
+    )
+
+    atmospheric_structure_by_layer["vertical_structure"] = (
+        atmospheric_structure_by_layer["vertical_structure"].assign(
+            {"path_lengths": path_lengths_by_layer_in_cm}
+        )
+    )
+
+    return atmospheric_structure_by_layer
+
+
+def compile_vertical_structure_with_power_law_clouds(
+    fundamental_parameters: xr.Dataset,
+    pressure_profile: xr.Dataset,
+    temperature_profile: xr.DataArray,
+    gas_chemistry: xr.Dataset,
+    cloud_profile: xr.Dataset,
+    additional_attributes: Optional[AttrsType] = None,
+) -> xr.DataTree:
+    planet_mass_in_g: float = calculate_mass_from_radius_and_surface_gravity(
+        fundamental_parameters.planet_radius,  # assumed to be pre-processed into cgs
+        fundamental_parameters.planet_gravity,  # assumed to be pre-processed into cgs
+    )
+
+    mean_molecular_weight_in_g: float = (
+        calculate_mean_molecular_weight(gas_chemistry) * AMU_IN_GRAMS
+    )
+
+    altitudes_by_level_in_cm: xr.DataArray = calculate_altitude_profile(
+        pressure_profile.log_pressures_by_level,
+        temperature_profile,
+        mean_molecular_weight_in_g,
+        fundamental_parameters.planet_radius,
+        planet_mass_in_g,
+    ).assign_coords(pressure=pressure_profile.pressure)
+
+    additional_attributes: AttrsType = (
+        additional_attributes if additional_attributes is not None else {}
+    )
+
+    vertical_structure_by_level: xr.Dataset = xr.Dataset(
+        data_vars={
+            "planet_radius": fundamental_parameters.planet_radius,
+            "planet_gravity": fundamental_parameters.planet_gravity,
+            "pressures_by_level": pressure_profile.pressure,
+            "log_pressures_by_level": pressure_profile.log_pressures_by_level,
+            "temperatures_by_level": temperature_profile,
+            "altitudes_by_level": altitudes_by_level_in_cm,
+        },
+        coords={
+            "pressure": pressure_profile.pressure,
+        },
+        attrs=additional_attributes,
+    )
+    vertical_structure_by_level_node: xr.DataTree = xr.DataTree(
+        name="vertical_structure", dataset=vertical_structure_by_level
+    )
+
+    mixing_ratios_by_level: xr.Dataset = gas_chemistry
+
+    mixing_ratios_by_level_node: xr.DataTree = xr.DataTree(
+        name="mixing_ratios", dataset=mixing_ratios_by_level
+    )
+
+    cloud_reference_optical_depths_by_level: xr.Dataset = (
+        build_power_law_cloud_profiles(
+            multiple_power_law_slab_cloud_inputs=cloud_profile,
+            pressure_profile=pressure_profile,
+        )
+    )
+
+    cloud_reference_optical_depths_by_level_node: xr.DataTree = xr.DataTree(
+        name="cloud_reference_optical_depths",
+        dataset=cloud_reference_optical_depths_by_level,
+    )
+
+    atmospheric_structure_by_level: xr.DataTree = xr.DataTree(
+        name="atmospheric_structure",
+        children={
+            "vertical_structure": vertical_structure_by_level_node,
+            "gas_mixing_ratios": mixing_ratios_by_level_node,
+            "cloud_reference_optical_depths": cloud_reference_optical_depths_by_level_node,
+        },
+    )
+
+    atmospheric_structure_by_layer: xr.DataTree = (
+        convert_datatree_by_pressure_levels_to_pressure_layers(
+            atmospheric_structure_by_level
+        )
+    )
+
+    species_with_discrete_boundaries: list[str] = [
+        species_name
+        for species_name in gas_chemistry.data_vars
+        if "boundary_log_pressure" in gas_chemistry[species_name].attrs
+    ]
+
+    if species_with_discrete_boundaries:
+        for species in species_with_discrete_boundaries:
+            species_mixing_ratios: xr.DataArray = atmospheric_structure_by_layer[
+                "gas_mixing_ratios"
+            ][species]
+
+            species_boundary_log_pressure: float = species_mixing_ratios.attrs[
+                "boundary_log_pressure"
+            ]
+            species_shallow_log_mixing_ratio: float = species_mixing_ratios.attrs[
+                "shallow_log_mixing_ratio"
+            ]
+            species_deep_log_mixing_ratio: float = species_mixing_ratios.attrs[
+                "deep_log_mixing_ratio"
+            ]
+
+            species_mixing_ratio_values: np.ndarray = species_mixing_ratios.values
+
+            # using the values property means the operation is done in place on the underlying array,
+            # so no need to reassign
+            species_mixing_ratio_values: np.ndarray = (
+                convert_two_level_mixing_ratios_by_species_from_levels_to_layers(
+                    species_mixing_ratio_values,
+                    species_shallow_log_mixing_ratio,
+                    species_deep_log_mixing_ratio,
+                    species_boundary_log_pressure,
+                    pressure_profile.log_pressures_by_level,
+                )
+            )
+
+    gas_number_densities_by_layer: xr.Dataset = xr.apply_ufunc(
+        mixing_ratios_to_number_densities_by_species,
+        atmospheric_structure_by_layer["gas_mixing_ratios"],
+        atmospheric_structure_by_layer["vertical_structure"].pressures_by_layer,
+        atmospheric_structure_by_layer["vertical_structure"].temperatures_by_layer,
+        dask="parallelized",
+    )
+
+    for species in gas_number_densities_by_layer.data_vars:
+        gas_number_densities_by_layer[species].attrs = gas_chemistry[species].attrs
+        gas_number_densities_by_layer[species].attrs["units"] = "cm^-3"
+
+    gas_number_densities_by_layer_node: xr.DataTree = xr.DataTree(
+        name="gas_number_densities", dataset=gas_number_densities_by_layer
+    )
+
+    atmospheric_structure_by_layer: xr.DataTree = atmospheric_structure_by_layer.assign(
+        {"gas_number_densities": gas_number_densities_by_layer_node}
     )
 
     path_lengths_by_layer_in_cm: xr.DataArray = altitudes_by_level_to_path_lengths(
@@ -555,33 +984,9 @@ def compile_vertical_structure_with_clouds(
         name="vertical_structure", dataset=vertical_structure_by_level
     )
 
-    gas_number_densities_by_level: xr.Dataset = xr.Dataset(
-        data_vars={
-            species: xr.DataArray(
-                data=number_density_array, coords=pressure_profile.coords
-            )
-            for species, number_density_array in mixing_ratios_to_number_densities(
-                mixing_ratios_by_level=gas_chemistry,
-                pressure_in_cgs=pressure_profile.pressure,  #  * BAR_TO_BARYE,
-                temperatures_in_K=temperature_profile,
-            ).items()
-        },
-        coords={"pressure": pressure_profile.pressure},
-        attrs={
-            "units": "cm^-3",
-            **additional_attributes,
-        },
-    )
-    gas_number_densities_by_level_node: xr.DataTree = xr.DataTree(
-        name="gas_number_densities", dataset=gas_number_densities_by_level
-    )
-
     atmospheric_structure_by_level: xr.DataTree = xr.DataTree(
         name="atmospheric_structure",
-        children={
-            "vertical_structure": vertical_structure_by_level_node,
-            "gas_number_densities": gas_number_densities_by_level_node,
-        },
+        children={"vertical_structure": vertical_structure_by_level_node},
     )
 
     atmospheric_structure_by_layer: xr.DataTree = (
@@ -601,6 +1006,24 @@ def compile_vertical_structure_with_clouds(
         temperatures_in_K=atmospheric_structure_by_layer[
             "vertical_structure"
         ].temperatures_by_layer,
+    )
+
+    gas_number_densities_by_layer: xr.Dataset = (
+        total_number_densities_by_layer * gas_chemistry
+    )
+
+    for gas_species in gas_number_densities_by_layer.data_vars:
+        gas_number_densities_by_layer[gas_species].attrs = gas_chemistry[
+            gas_species
+        ].attrs
+        gas_number_densities_by_layer[gas_species].attrs["units"] = "cm^-3"
+
+    gas_number_densities_by_layer_node: xr.DataTree = xr.DataTree(
+        name="gas_number_densities", dataset=gas_number_densities_by_layer
+    )
+
+    atmospheric_structure_by_layer["gas_number_densities"] = (
+        gas_number_densities_by_layer_node
     )
 
     cloud_number_densities_by_layer: xr.Dataset = (
@@ -909,10 +1332,6 @@ def calculate_emission_at_surface_without_clouds(
             emission_fluxes.wavelength,
             emission_fluxes,
             fwhm=resampling_fwhm_fraction,
-            # * (
-            #    reference_model_wavelengths.to_numpy()[-1]
-            #    - reference_model_wavelengths.to_numpy()[-2]
-            # ),
         )
     ).rename("resampled_emission_flux")
 
@@ -921,7 +1340,7 @@ def calculate_emission_at_surface_without_clouds(
 
 def calculate_emission_model_without_clouds(
     forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
-) -> float:
+) -> np.ndarray:
     emission_fluxes = calculate_observed_fluxes_without_clouds_via_two_stream(
         forward_model_inputs=forward_model_inputs
     )
@@ -948,7 +1367,7 @@ def calculate_emission_model_without_clouds(
 
 def calculate_emission_model_with_clouds(
     forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
-) -> float:
+) -> np.ndarray:
     emission_fluxes = calculate_observed_fluxes_with_clouds_via_two_stream(
         forward_model_inputs=forward_model_inputs
     )
@@ -963,10 +1382,6 @@ def calculate_emission_model_with_clouds(
             emission_fluxes.wavelength,
             emission_fluxes,
             fwhm=resampling_fwhm_fraction,
-            # * (
-            #    reference_model_wavelengths.to_numpy()[-1]
-            #    - reference_model_wavelengths.to_numpy()[-2]
-            # ),
         )
     ).rename("resampled_emission_flux")
 
@@ -975,7 +1390,7 @@ def calculate_emission_model_with_clouds(
 
 def calculate_cloudy_emission_model_with_spectral_groups(
     forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
-) -> float:
+) -> xr.DataArray:
     emission_fluxes = calculate_observed_fluxes_with_clouds_via_two_stream(
         forward_model_inputs=forward_model_inputs
     )
@@ -999,10 +1414,41 @@ def calculate_cloudy_emission_model_with_spectral_groups(
             model_wavelengths,
             model_fluxes,
             fwhm=resampling_fwhm_fraction,
-            # * (
-            #    spectral_group_wavelengths.to_numpy()[-1]
-            #    - spectral_group_wavelengths.to_numpy()[-2]
-            # ),
+        )
+
+    emission_fluxes_sampled_to_data: xr.DataArray = (
+        reference_model_wavelengths.map(resample_spectrum_per_group)
+    ).rename("resampled_emission_flux")
+
+    return emission_fluxes_sampled_to_data
+
+
+def calculate_power_law_cloudy_emission_model_with_spectral_groups(
+    forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
+) -> xr.DataArray:
+    emission_fluxes = calculate_observed_fluxes_with_power_law_clouds_via_two_stream(
+        forward_model_inputs=forward_model_inputs
+    )
+
+    observable_parameters: xr.Dataset = forward_model_inputs[
+        "observable_parameters"
+    ].to_dataset()
+
+    reference_model_wavelengths: xr.DataArray = (
+        observable_parameters.wavelength.groupby("spectral_group")
+    )
+
+    def resample_spectrum_per_group(
+        spectral_group_wavelengths: xr.DataArray,
+        model_wavelengths: xr.DataArray = emission_fluxes.wavelength,
+        model_fluxes: xr.DataArray = emission_fluxes,
+        resampling_fwhm_fraction: float = resampling_fwhm_fraction,
+    ) -> xr.DataArray:
+        return resample_spectral_quantity_to_new_wavelengths(
+            spectral_group_wavelengths,
+            model_wavelengths,
+            model_fluxes,
+            fwhm=resampling_fwhm_fraction,
         )
 
     emission_fluxes_sampled_to_data: xr.DataArray = (
@@ -1014,7 +1460,7 @@ def calculate_cloudy_emission_model_with_spectral_groups(
 
 def calculate_cloudfree_emission_model_with_spectral_groups(
     forward_model_inputs: xr.DataTree, resampling_fwhm_fraction: float
-) -> float:
+) -> xr.DataArray:
     emission_fluxes = calculate_observed_fluxes_without_clouds_via_two_stream(
         forward_model_inputs=forward_model_inputs
     )
@@ -1038,10 +1484,6 @@ def calculate_cloudfree_emission_model_with_spectral_groups(
             model_wavelengths,
             model_fluxes,
             fwhm=resampling_fwhm_fraction,
-            # * (
-            #    spectral_group_wavelengths.to_numpy()[-1]
-            #    - spectral_group_wavelengths.to_numpy()[-2]
-            # ),
         )
 
     emission_fluxes_sampled_to_data: xr.DataArray = (
@@ -1068,10 +1510,6 @@ def calculate_transmission_model(
             transit_depths.wavelength,
             transit_depths,
             fwhm=resampling_fwhm_fraction,
-            # * (
-            #    reference_model_wavelengths.to_numpy()[-1]
-            #    - reference_model_wavelengths.to_numpy()[-2]
-            # ),
         )
     ).rename("resampled_transmission_flux")
 

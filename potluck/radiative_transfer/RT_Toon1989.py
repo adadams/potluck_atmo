@@ -82,7 +82,9 @@ class RTToon1989Inputs:
     )
 
 
-@set_result_name_and_units(new_name="emitted_twostream_flux", units="erg s^-1 cm^-3")
+@set_result_name_and_units(
+    result_names="emitted_twostream_flux", units="erg s^-1 cm^-3"
+)
 @Dimensionalize(
     argument_dimensions=(
         (WavelengthDimension, PressureDimension),
@@ -242,13 +244,9 @@ def DSolver_subroutine(
     """
 
     e1 = 1 + gama * inverse_ep
-    print(f"{np.min(e1)=}, {np.max(e1)=}")
     e2 = 1 - gama * inverse_ep
-    print(f"{np.min(e2)=}, {np.max(e2)=}")
     e3 = gama + inverse_ep
-    print(f"{np.min(e3)=}, {np.max(e3)=}")
     e4 = gama - inverse_ep
-    print(f"{np.min(e4)=}, {np.max(e4)=}")
 
     e1_top_layer: np.ndarray = e1[*top_layer]
     e2_top_layer: np.ndarray = e2[*top_layer]

@@ -8,6 +8,7 @@ def get_uniform_samples_from_monotonic_nodes(
     lower_bound: float,
     upper_bound: float,
     reference_index: int = 5,
+    expected_number_of_temperature_nodes: int = 10,
 ):
     """
     Given a set of 10 monotonic temperature nodes within bounds,
@@ -32,7 +33,7 @@ def get_uniform_samples_from_monotonic_nodes(
                     or if calculations lead to division by zero unexpectedly.
     """
     num_points = len(temperature_nodes)
-    if num_points != 10:
+    if num_points != expected_number_of_temperature_nodes:
         raise ValueError("temperature_nodes must contain exactly 10 points.")
     if not np.all(
         (temperature_nodes >= lower_bound - 1e-9)

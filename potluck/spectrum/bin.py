@@ -8,8 +8,9 @@ from spectres import spectres
 
 from potluck.spectrum.convolve import (
     convolve_to_constant_R,
-    convolve_with_constant_FWHM,
+    convolve_with_constant_FWHM_FFT,
 )
+from potluck.spectrum.wavelength import calculate_mean_resolution
 
 resample_by_spectres: Callable[
     [xr.DataArray, xr.DataArray, xr.DataArray], xr.DataArray
@@ -28,12 +29,22 @@ def convolve_and_bin_with_constant_FWHM(
     model_wavelengths: np.ndarray[np.float64],
     model_spectral_quantity: np.ndarray[np.float64],
     fwhm: float,
+    model_errors: Optional[np.ndarray[np.float64]] = None,
 ):
-    convolved_spectrum: np.ndarray[np.float64] = convolve_with_constant_FWHM(
+    convolved_spectrum: np.ndarray[np.float64] = convolve_with_constant_FWHM_FFT(
         model_wavelengths, model_spectral_quantity, fwhm
     )
 
-    return spectres(new_wavelengths, model_wavelengths, convolved_spectrum)
+    if model_errors is not None:
+        convolved_model_errors: np.ndarray[np.float64] = (
+            convolve_with_constant_FWHM_FFT(model_wavelengths, model_errors, fwhm)
+        )
+    else:
+        convolved_model_errors = None
+
+    return spectres(
+        new_wavelengths, model_wavelengths, convolved_spectrum, convolved_model_errors
+    )
 
 
 def convolve_and_bin_with_constant_R(
@@ -64,7 +75,7 @@ def convolve_and_bin_with_constant_R(
 
 convolve_and_resample_by_spectres = partial(
     xr.apply_ufunc,
-    convolve_and_bin_with_constant_R,
+    convolve_and_bin_with_constant_FWHM,
     input_core_dims=[["wavelength"], ["wavelength"], ["wavelength"], []],
     output_core_dims=[["wavelength"]],
     exclude_dims=set(("wavelength",)),
@@ -73,7 +84,7 @@ convolve_and_resample_by_spectres = partial(
 
 convolve_and_resample_with_errors = partial(
     xr.apply_ufunc,
-    convolve_and_bin_with_constant_R,
+    convolve_and_bin_with_constant_FWHM,
     input_core_dims=[
         ["wavelength"],
         ["wavelength"],
@@ -103,7 +114,10 @@ def resample_spectral_quantity_to_new_wavelengths(
     fwhm: Optional[float] = None,
 ) -> xr.Dataset:
     if fwhm is None:
-        fwhm = 3.0 * (new_wavelengths[-1] - new_wavelengths[-2])
+        mean_model_resolution: float = calculate_mean_resolution(model_wavelengths)
+        mean_new_resolution: float = calculate_mean_resolution(new_wavelengths)
+        fwhm = mean_model_resolution / mean_new_resolution
+        # print(f"{fwhm=} from {mean_model_resolution=} and {mean_new_resolution=}.")
 
     return convolve_and_resample_by_spectres(
         new_wavelengths, model_wavelengths, model_spectral_quantity, fwhm

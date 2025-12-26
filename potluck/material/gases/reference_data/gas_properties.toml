@@ -4,6 +4,8 @@ he =          { scaopac = 0,         mmw = 4.00 }
 h- =          { scaopac = 0,         mmw = 1.01 }
 h2o =         { scaopac = 2.454e-27, mmw = 18.02 }
 ch4 =         { scaopac = 6.50e-27,  mmw = 16.04 }
+12co =        { scaopac = 4.14e-27,  mmw = 28.01 }
+13co =        { scaopac = 4.14e-27,  mmw = 29.00 }
 co =          { scaopac = 4.14e-27,  mmw = 28.01 }
 co2 =         { scaopac = 6.82e-27,  mmw = 44.01 }
 nh3 =         { scaopac = 4.80e-27,  mmw = 17.03 }

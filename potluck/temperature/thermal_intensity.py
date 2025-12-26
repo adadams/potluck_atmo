@@ -11,7 +11,7 @@ from potluck.xarray_functional_wrappers import Dimensionalize, set_result_name_a
 
 
 @set_result_name_and_units(
-    new_name="thermal_intensity_by_level", units="erg s^-1 cm^-3"
+    result_names="thermal_intensity_by_level", units="erg s^-1 cm^-3"
 )
 @Dimensionalize(
     argument_dimensions=(
