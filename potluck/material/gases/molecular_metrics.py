@@ -13,7 +13,9 @@ NONMETAL_MOLECULAR_WEIGHTS: Final[dict[str, float]] = {
     "h2": 2.02,
     "h2only": 2.02,
     "he": 4.00,
-    "h2he": 2.33,  # 84% H2, 16% He
+    "h2he": 2.55,  # 83% H2, 17% He
+    "h2heh-": 2.55,  # 83% H2, 17% He
+    "e-": 0.0005485799094,
 }
 
 METAL_MOLECULAR_WEIGHTS: Final[dict[str, float]] = {

@@ -31,6 +31,11 @@ from potluck.compile_crosssection_data import (
 )
 from potluck.constants_and_conversions import AMU_IN_GRAMS
 from potluck.density import calculate_mass_from_radius_and_surface_gravity
+from potluck.material.absorbing.Hminus_functions import (
+    calculate_h_minus_mixing_ratios,
+    compile_anionic_opacity_crosssections,
+    compute_h_minus_opacity_factors,
+)
 from potluck.material.clouds.cloud_metrics import (
     calculate_cloud_mixing_ratios_by_layer,
     convert_cloud_remaining_fraction_to_thickness,
@@ -665,8 +670,38 @@ def compile_vertical_structure(
         fundamental_parameters.planet_gravity,  # assumed to be pre-processed into cgs
     )
 
+    total_number_density: np.ndarray[np.float64] = calculate_total_number_density(
+        pressure_profile.pressure, temperature_profile
+    )
+
+    if "h2" in gas_chemistry.data_vars:
+        h2_filler_species: str = "h2"
+        h2_filler_fraction: float = 1.00
+
+    elif "h2he" in gas_chemistry.data_vars:
+        h2_filler_species: str = "h2he"
+        h2_filler_fraction: float = 0.83
+
+    else:
+        raise NotImplementedError(
+            "h2 or h2he are currently the only filler species implemented for H minus opacities."
+        )
+
+    hminus_mixing_ratios_by_level: xr.Dataset = calculate_h_minus_mixing_ratios(
+        gas_chemistry,
+        temperature_profile,
+        total_number_density,
+        h2_filler_species,
+        h2_filler_fraction,
+    )
+
+    gas_chemistry_with_non_reference_table_species: xr.Dataset = xr.merge(
+        [gas_chemistry, hminus_mixing_ratios_by_level]
+    )
+
     mean_molecular_weight_in_g: float = (
-        calculate_mean_molecular_weight(gas_chemistry) * AMU_IN_GRAMS
+        calculate_mean_molecular_weight(gas_chemistry_with_non_reference_table_species)
+        * AMU_IN_GRAMS
     )
 
     altitudes_by_level_in_cm: xr.DataArray = calculate_altitude_profile(
@@ -699,7 +734,7 @@ def compile_vertical_structure(
         name="vertical_structure", dataset=vertical_structure_by_level
     )
 
-    mixing_ratios_by_level: xr.Dataset = gas_chemistry
+    mixing_ratios_by_level: xr.Dataset = gas_chemistry_with_non_reference_table_species
 
     mixing_ratios_by_level_node: xr.DataTree = xr.DataTree(
         name="mixing_ratios", dataset=mixing_ratios_by_level
@@ -763,16 +798,32 @@ def compile_vertical_structure(
         dask="parallelized",
     )
 
-    for species in gas_number_densities_by_layer.data_vars:
+    for species in gas_chemistry.data_vars:
         gas_number_densities_by_layer[species].attrs = gas_chemistry[species].attrs
         gas_number_densities_by_layer[species].attrs["units"] = "cm^-3"
 
+    gas_species_calculated_from_reference_data: list[str] = list(
+        gas_chemistry.data_vars
+    )
+    other_gas_species: list[str] = list(hminus_mixing_ratios_by_level.data_vars)
+
     gas_number_densities_by_layer_node: xr.DataTree = xr.DataTree(
-        name="gas_number_densities", dataset=gas_number_densities_by_layer
+        name="gas_number_densities",
+        dataset=gas_number_densities_by_layer.get(
+            gas_species_calculated_from_reference_data
+        ),
+    )
+
+    hminus_number_densities_by_layer_node: xr.DataTree = xr.DataTree(
+        name="hminus_number_densities",
+        dataset=gas_number_densities_by_layer.get(other_gas_species),
     )
 
     atmospheric_structure_by_layer: xr.DataTree = atmospheric_structure_by_layer.assign(
-        {"gas_number_densities": gas_number_densities_by_layer_node}
+        {
+            "gas_number_densities": gas_number_densities_by_layer_node,
+            "hminus_number_densities": hminus_number_densities_by_layer_node,
+        }
     )
 
     path_lengths_by_layer_in_cm: xr.DataArray = altitudes_by_level_to_path_lengths(
@@ -801,8 +852,38 @@ def compile_vertical_structure_with_power_law_clouds(
         fundamental_parameters.planet_gravity,  # assumed to be pre-processed into cgs
     )
 
+    total_number_density: np.ndarray[np.float64] = calculate_total_number_density(
+        pressure_profile.pressure, temperature_profile
+    )
+
+    if "h2" in gas_chemistry.data_vars:
+        h2_filler_species: str = "h2"
+        h2_filler_fraction: float = 1.00
+
+    elif "h2he" in gas_chemistry.data_vars:
+        h2_filler_species: str = "h2he"
+        h2_filler_fraction: float = 0.83
+
+    else:
+        raise NotImplementedError(
+            "h2 or h2he are currently the only filler species implemented for H minus opacities."
+        )
+
+    hminus_mixing_ratios_by_level: xr.Dataset = calculate_h_minus_mixing_ratios(
+        gas_chemistry,
+        temperature_profile,
+        total_number_density,
+        h2_filler_species,
+        h2_filler_fraction,
+    )
+
+    gas_chemistry_with_non_reference_table_species: xr.Dataset = xr.merge(
+        [gas_chemistry, hminus_mixing_ratios_by_level]
+    )
+
     mean_molecular_weight_in_g: float = (
-        calculate_mean_molecular_weight(gas_chemistry) * AMU_IN_GRAMS
+        calculate_mean_molecular_weight(gas_chemistry_with_non_reference_table_species)
+        * AMU_IN_GRAMS
     )
 
     altitudes_by_level_in_cm: xr.DataArray = calculate_altitude_profile(
@@ -835,7 +916,7 @@ def compile_vertical_structure_with_power_law_clouds(
         name="vertical_structure", dataset=vertical_structure_by_level
     )
 
-    mixing_ratios_by_level: xr.Dataset = gas_chemistry
+    mixing_ratios_by_level: xr.Dataset = gas_chemistry_with_non_reference_table_species
 
     mixing_ratios_by_level_node: xr.DataTree = xr.DataTree(
         name="mixing_ratios", dataset=mixing_ratios_by_level
@@ -912,16 +993,32 @@ def compile_vertical_structure_with_power_law_clouds(
         dask="parallelized",
     )
 
-    for species in gas_number_densities_by_layer.data_vars:
+    for species in gas_chemistry.data_vars:
         gas_number_densities_by_layer[species].attrs = gas_chemistry[species].attrs
         gas_number_densities_by_layer[species].attrs["units"] = "cm^-3"
 
+    gas_species_calculated_from_reference_data: list[str] = list(
+        gas_chemistry.data_vars
+    )
+    other_gas_species: list[str] = list(hminus_mixing_ratios_by_level.data_vars)
+
     gas_number_densities_by_layer_node: xr.DataTree = xr.DataTree(
-        name="gas_number_densities", dataset=gas_number_densities_by_layer
+        name="gas_number_densities",
+        dataset=gas_number_densities_by_layer.get(
+            gas_species_calculated_from_reference_data
+        ),
+    )
+
+    hminus_number_densities_by_layer_node: xr.DataTree = xr.DataTree(
+        name="hminus_number_densities",
+        dataset=gas_number_densities_by_layer.get(other_gas_species),
     )
 
     atmospheric_structure_by_layer: xr.DataTree = atmospheric_structure_by_layer.assign(
-        {"gas_number_densities": gas_number_densities_by_layer_node}
+        {
+            "gas_number_densities": gas_number_densities_by_layer_node,
+            "hminus_number_densities": hminus_number_densities_by_layer_node,
+        }
     )
 
     path_lengths_by_layer_in_cm: xr.DataArray = altitudes_by_level_to_path_lengths(
@@ -950,8 +1047,38 @@ def compile_vertical_structure_with_clouds(
         fundamental_parameters.planet_gravity,  # assumed to be pre-processed into cgs
     )
 
+    total_number_density: np.ndarray[np.float64] = calculate_total_number_density(
+        pressure_profile.pressure, temperature_profile
+    )
+
+    if "h2" in gas_chemistry.data_vars:
+        h2_filler_species: str = "h2"
+        h2_filler_fraction: float = 1.00
+
+    elif "h2he" in gas_chemistry.data_vars:
+        h2_filler_species: str = "h2he"
+        h2_filler_fraction: float = 0.83
+
+    else:
+        raise NotImplementedError(
+            "h2 or h2he are currently the only filler species implemented for H minus opacities."
+        )
+
+    hminus_mixing_ratios_by_level: xr.Dataset = calculate_h_minus_mixing_ratios(
+        gas_chemistry,
+        temperature_profile,
+        total_number_density,
+        h2_filler_species,
+        h2_filler_fraction,
+    )
+
+    gas_chemistry_with_non_reference_table_species: xr.Dataset = xr.merge(
+        [gas_chemistry, hminus_mixing_ratios_by_level]
+    )
+
     mean_molecular_weight_in_g: float = (
-        calculate_mean_molecular_weight(gas_chemistry) * AMU_IN_GRAMS
+        calculate_mean_molecular_weight(gas_chemistry_with_non_reference_table_species)
+        * AMU_IN_GRAMS
     )
 
     altitudes_by_level_in_cm: xr.DataArray = calculate_altitude_profile(
@@ -1009,7 +1136,7 @@ def compile_vertical_structure_with_clouds(
     )
 
     gas_number_densities_by_layer: xr.Dataset = (
-        total_number_densities_by_layer * gas_chemistry
+        total_number_densities_by_layer * gas_chemistry_with_non_reference_table_species
     )
 
     for gas_species in gas_number_densities_by_layer.data_vars:
@@ -1018,12 +1145,21 @@ def compile_vertical_structure_with_clouds(
         ].attrs
         gas_number_densities_by_layer[gas_species].attrs["units"] = "cm^-3"
 
+    gas_species_calculated_from_reference_data: list[str] = list(
+        gas_chemistry.data_vars
+    )
+    other_gas_species: list[str] = list(hminus_mixing_ratios_by_level.data_vars)
+
     gas_number_densities_by_layer_node: xr.DataTree = xr.DataTree(
-        name="gas_number_densities", dataset=gas_number_densities_by_layer
+        name="gas_number_densities",
+        dataset=gas_number_densities_by_layer.get(
+            gas_species_calculated_from_reference_data
+        ),
     )
 
-    atmospheric_structure_by_layer["gas_number_densities"] = (
-        gas_number_densities_by_layer_node
+    hminus_number_densities_by_layer_node: xr.DataTree = xr.DataTree(
+        name="hminus_number_densities",
+        dataset=gas_number_densities_by_layer.get(other_gas_species),
     )
 
     cloud_number_densities_by_layer: xr.Dataset = (
@@ -1040,8 +1176,12 @@ def compile_vertical_structure_with_clouds(
         name="cloud_number_densities", dataset=cloud_number_densities_by_layer
     )
 
-    atmospheric_structure_by_layer["cloud_number_densities"] = (
-        cloud_number_densities_by_layer_node
+    atmospheric_structure_by_layer: xr.DataTree = atmospheric_structure_by_layer.assign(
+        {
+            "gas_number_densities": gas_number_densities_by_layer_node,
+            "hminus_number_densities": hminus_number_densities_by_layer_node,
+            "cloud_number_densities": cloud_number_densities_by_layer_node,
+        }
     )
 
     atmospheric_structure_by_layer["gas_number_densities"] = (
@@ -1050,10 +1190,6 @@ def compile_vertical_structure_with_clouds(
             cloud_number_densities_by_layer,
             total_number_densities_by_layer,
         )
-    )
-
-    atmospheric_structure_by_layer: xr.DataTree = atmospheric_structure_by_layer.assign(
-        {"cloud_number_densities": cloud_number_densities_by_layer_node}
     )
 
     atmospheric_structure_by_layer["vertical_structure"] = (
@@ -1165,6 +1301,8 @@ def build_forward_model(
     crosssection_catalog: xr.Dataset,
     observable_inputs: xr.Dataset,
     crosssection_catalog_ready_to_use: bool = False,  # i.e. it has been pre-interpolated, for example if the temperature profile is fixed
+    filler_species: Optional[str] = "h2he",
+    h2_filler_fraction: Optional[float] = 0.83,
 ) -> xr.DataTree:
     observable_parameter_node: xr.DataTree = xr.DataTree(
         name="observable_parameters", dataset=observable_inputs
@@ -1202,6 +1340,27 @@ def build_forward_model(
                 pressures_by_layer=pressures_by_layer,
                 species_present_in_model=species_present_in_model,
             )
+        )
+
+    if "hminus_number_densities" in atmospheric_structure_by_layer:
+        h_minus_opacity_factors: xr.Dataset = compute_h_minus_opacity_factors(
+            atmospheric_structure_by_layer["hminus_number_densities"].to_dataset(),
+            atmospheric_structure_by_layer["gas_number_densities"].get(filler_species),
+            h2_filler_fraction,
+        )
+
+        h_minus_opacity_crosssections: xr.Dataset = (
+            compile_anionic_opacity_crosssections(
+                h_minus_opacity_factors,
+                temperatures_by_layer,
+                crosssection_catalog.wavelength,
+            )
+        ).assign_coords(
+            wavelength=crosssection_catalog_with_wavelengths_in_cm.wavelength
+        )
+
+        crosssection_catalog_interpolated_to_model[filler_species] += (
+            h_minus_opacity_crosssections
         )
 
     crosssection_catalog_node: xr.DataTree = xr.DataTree(
