@@ -142,11 +142,11 @@ def calculate_power_law_cloud_two_stream_parameters_across_wavelengths(
     )[:, None]  # (n_wavelengths, n_layers)
 
     return (
-        cloud_absorption_coefficients_at_reference_wavelength_by_layer
-        * power_law_multiplicative_factors,
         cloud_forward_scattering_coefficients_at_reference_wavelength_by_layer
         * power_law_multiplicative_factors,
         cloud_backward_scattering_coefficients_at_reference_wavelength_by_layer
+        * power_law_multiplicative_factors,
+        cloud_absorption_coefficients_at_reference_wavelength_by_layer
         * power_law_multiplicative_factors,
     )
 

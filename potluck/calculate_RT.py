@@ -4,6 +4,7 @@ from typing import Optional
 
 import xarray as xr
 
+from potluck.basic_types import NonnegativeValue, NormalizedValue, TemperatureValue
 from potluck.compile_crosssection_data import curate_gas_crosssection_catalog
 from potluck.compile_thermal_structure import (
     compile_thermal_structure_for_forward_model,
@@ -34,6 +35,7 @@ from potluck.radiative_transfer.RT_one_stream import (
 )
 from potluck.radiative_transfer.RT_Toon1989_jax import RT_Toon1989, RTToon1989Inputs
 from potluck.spectrum.bin import resample_spectral_quantity_to_new_wavelengths
+from potluck.temperature.effective_temperature import calculate_effective_temperature
 from potluck.xarray_functional_wrappers import XarrayOutputs
 
 current_directory: Path = Path(__file__).parent
@@ -213,6 +215,33 @@ def calculate_observed_transmission_spectrum(
     return transmission_flux
 
 
+def compile_custom_model_metrics(
+    forward_model_inputs: xr.DataTree, emission_flux: xr.DataArray
+) -> dict[str, float]:
+    # here we'll pull the C/O ratio, metallicity, and effective temperature
+    atmospheric_structure_by_layer: xr.DataArray = forward_model_inputs[
+        "atmospheric_structure_by_layer"
+    ]
+
+    gas_number_densities_by_layer: xr.DataArray = atmospheric_structure_by_layer[
+        "gas_number_densities"
+    ]
+
+    # C/O ratio and metallicity are stored as attributes on the gas number densities dataset
+    C_to_O_ratio: NonnegativeValue = gas_number_densities_by_layer.attrs["c_to_o"]
+    metallicity: float = gas_number_densities_by_layer.attrs["metallicity"]
+
+    effective_temperature_in_K: TemperatureValue = calculate_effective_temperature(
+        emission_flux_density=emission_flux
+    )
+
+    return {
+        "C_to_O_ratio": C_to_O_ratio,
+        "metallicity": metallicity,
+        "effective_temperature_in_K": effective_temperature_in_K,
+    }
+
+
 # TODO: ideally we can refine the interface for these sorts of functions.
 # In other words, instead of providing the entire forward model input datatree,
 # there could be a specific "pruning" of the tree to match the interface for a function
@@ -335,8 +364,24 @@ def calculate_observed_fluxes_with_power_law_clouds_via_two_stream(
         "atmospheric_structure_by_layer"
     ]["cloud_reference_optical_depths"].to_dataset()
 
+    areal_filling_fractions: list[NonnegativeValue] = [
+        cloud_profile.attrs["areal_filling_fraction"]
+        for cloud_profile in power_law_cloud_profiles.data_vars.values()
+    ]
+
+    # for now, areal_filling_fractions must be the same for all clouds
+    number_of_distinct_filling_fractions: int = len(set(areal_filling_fractions))
+
+    if number_of_distinct_filling_fractions > 1:
+        raise NotImplementedError(
+            "areal_filling_fraction must be the same for all clouds ",
+            "(the code to handle this is not yet implemented)",
+        )
+
+    assumed_uniform_areal_filling_fraction: NormalizedValue = areal_filling_fractions[0]
+
     # TODO: there is probably a way to extend "set_result_name_and_units" so we can remove the tuple/class-like return structures
-    two_stream_parameters: TwoStreamParameters = (
+    cloudy_two_stream_parameters: TwoStreamParameters = (
         compile_composite_two_stream_parameters_with_gas_and_power_law_clouds(
             wavelengths_in_cm=model_wavelengths_in_cm,
             gas_crosssections=gas_crosssection_catalog_as_dataarray,
@@ -346,22 +391,56 @@ def calculate_observed_fluxes_with_power_law_clouds_via_two_stream(
         )
     )
 
-    RT_Toon1989_inputs: RTToon1989Inputs = RTToon1989Inputs(
+    cloudy_RT_Toon1989_inputs: RTToon1989Inputs = RTToon1989Inputs(
         thermal_intensity=thermal_intensities.thermal_intensity_by_layer,
         delta_thermal_intensity=thermal_intensities.delta_thermal_intensity_by_layer,
-        **asdict(two_stream_parameters),
+        **asdict(cloudy_two_stream_parameters),
     )
 
-    emitted_twostream_flux: xr.DataArray = RT_Toon1989(*astuple(RT_Toon1989_inputs))
+    cloudy_emitted_twostream_flux: xr.DataArray = RT_Toon1989(
+        *astuple(cloudy_RT_Toon1989_inputs)
+    )
+
+    clear_two_stream_parameters: TwoStreamParameters = (
+        compile_composite_two_stream_parameters_with_gas_only(
+            wavelengths_in_cm=model_wavelengths_in_cm,
+            crosssections=gas_crosssection_catalog_as_dataarray,
+            number_density=number_densities_by_layer,
+            path_lengths=path_lengths_in_cm,
+        )
+    )
+
+    clear_RT_Toon1989_inputs: RTToon1989Inputs = RTToon1989Inputs(
+        thermal_intensity=thermal_intensities.thermal_intensity_by_layer,
+        delta_thermal_intensity=thermal_intensities.delta_thermal_intensity_by_layer,
+        **asdict(clear_two_stream_parameters),
+    )
+
+    clear_emitted_twostream_flux: xr.DataArray = RT_Toon1989(
+        *astuple(clear_RT_Toon1989_inputs)
+    )
+
+    emitted_twostream_flux: xr.DataArray = (
+        assumed_uniform_areal_filling_fraction * cloudy_emitted_twostream_flux
+        + (1 - assumed_uniform_areal_filling_fraction) * clear_emitted_twostream_flux
+    ).rename("emitted_twostream_flux")
+
+    custom_model_metrics: dict[str, float] = compile_custom_model_metrics(
+        forward_model_inputs=forward_model_inputs, emission_flux=emitted_twostream_flux
+    )
 
     observed_twostream_flux: xr.DataArray = (
-        emitted_twostream_flux
-        * (
-            vertical_structure_by_layer.planet_radius
-            / forward_model_inputs["observable_parameters"].distance_to_system
+        (
+            emitted_twostream_flux
+            * (
+                vertical_structure_by_layer.planet_radius
+                / forward_model_inputs["observable_parameters"].distance_to_system
+            )
+            ** 2
         )
-        ** 2
-    ).rename("observed_twostream_flux")
+        .rename("observed_twostream_flux")
+        .assign_attrs(**custom_model_metrics)
+    )
 
     return observed_twostream_flux
 

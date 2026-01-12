@@ -1,4 +1,5 @@
 import numpy as np
+import xarray as xr
 
 from potluck.basic_types import WavelengthDimension
 from potluck.xarray_functional_wrappers import Dimensionalize
@@ -13,7 +14,7 @@ from potluck.xarray_functional_wrappers import Dimensionalize
     ),
     result_dimensions=((WavelengthDimension,),),
 )
-def inflate_errors_by_flux_scaling(
+def inflate_errors_by_flux_scaling_by_instrument(
     flux: np.ndarray,
     flux_errors: np.ndarray,
     flux_scaled_error_inflation_factor: float,
@@ -26,3 +27,33 @@ def inflate_errors_by_flux_scaling(
     )
 
     return inflated_flux_variances**0.5
+
+
+def inflate_errors_by_flux_scaling(
+    data: xr.DataArray,
+    data_errors: xr.DataArray,
+    error_inflation_factors_by_instrument: dict[str, float],
+) -> xr.DataArray:
+    for (
+        instrument,
+        error_inflation_factors,
+    ) in error_inflation_factors_by_instrument.items():
+        flux_scaled_error_inflation_factor: float = error_inflation_factors[
+            "flux_scaled_error_inflation_factor"
+        ]
+        log10_constant_error_inflation_term: float = error_inflation_factors[
+            "log10_constant_error_inflation_term"
+        ]
+
+        inflated_flux_errors: xr.DataArray = xr.where(
+            data.instrument == instrument,
+            inflate_errors_by_flux_scaling_by_instrument(
+                data,
+                data_errors,
+                flux_scaled_error_inflation_factor,
+                log10_constant_error_inflation_term,
+            ),
+            data_errors,
+        )
+
+    return inflated_flux_errors

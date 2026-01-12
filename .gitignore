@@ -48,3 +48,5 @@ potluck/temperature/poseidon_piette_function.py
 examine_Na2S_optical_depths.py
 pyROX/
 compare_with_pRT/
+potluck/retrieval/export_intermediate_retrieval_results.py
+potluck/curate_TauREX_molecular_crosssections_for_Teff.py

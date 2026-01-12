@@ -104,11 +104,49 @@ def calculate_mean_resolution(wavelengths: xr.DataArray):
     return (inbetween_wavelengths / wavelength_spacings).mean().item()
 
 
-if __name__ == "__main__":
-    test_wavelength_coordinate: np.ndarray[np.float64] = build_wavelength_array(
-        minimum_wavelength=0.8,
-        maximum_wavelength=5.3,
-        effective_resolution=200,
+def convert_spectral_coordinate_by_level_to_by_layer(
+    spectral_coordinate: xr.DataArray,
+) -> xr.DataArray:
+    mid_spectral_bin_values: np.ndarray = (
+        spectral_coordinate.to_numpy()[1:] + spectral_coordinate.to_numpy()[:-1]
+    ) / 2
+
+    return xr.DataArray(
+        data=mid_spectral_bin_values,
+        dims=(spectral_coordinate.name,),
+        name=spectral_coordinate.name,
+        attrs=spectral_coordinate.attrs,
     )
 
-    print(f"{test_wavelength_coordinate=}")
+
+def calculate_spectral_quantity_at_wavelength_bin_midpoints(
+    spectral_quantity: xr.DataArray,
+) -> xr.DataArray:
+    midbin_wavelengths: xr.DataArray = convert_spectral_coordinate_by_level_to_by_layer(
+        spectral_quantity.wavelength
+    )
+
+    midbin_fluxes: xr.DataArray = spectral_quantity.interp(
+        wavelength=midbin_wavelengths
+    )
+
+    return midbin_fluxes
+
+
+def calculate_spectrally_integrated_flux(
+    spectral_dataarray: xr.DataArray, flux_wavelength_units: str = "cm"
+) -> xr.DataArray:
+    midbin_fluxes: xr.DataArray = (
+        calculate_spectral_quantity_at_wavelength_bin_midpoints(spectral_dataarray)
+    )
+
+    delta_wavelengths: xr.DataArray = (
+        spectral_dataarray.wavelength.diff("wavelength")
+        .assign_coords(wavelength=midbin_fluxes.wavelength)
+        .rename("delta_wavelength")
+        .assign_attrs(units=flux_wavelength_units)
+    )
+
+    spectrally_integrated_flux: xr.DataArray = midbin_fluxes * delta_wavelengths
+
+    return spectrally_integrated_flux

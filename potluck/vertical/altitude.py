@@ -38,7 +38,7 @@ def convert_data_by_level_to_by_layer(
     if coordinate_name not in xarray_structure.coords:
         raise ValueError(f"Dataset must have {coordinate_name} as a coordinate.")
 
-    return None
+    return NotImplementedError
 
 
 def convert_dataarray_by_pressure_levels_to_pressure_layers(

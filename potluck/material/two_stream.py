@@ -306,9 +306,11 @@ def compile_composite_two_stream_parameters(
         two_stream_inputs, dim="source"
     ).sum("source")
 
-    return compile_two_stream_parameters(
+    composite_two_stream_parameters: TwoStreamParameters = compile_two_stream_parameters(
         forward_scattering_coefficients=concatenated_two_stream_inputs.forward_scattering_coefficients,
         backward_scattering_coefficients=concatenated_two_stream_inputs.backward_scattering_coefficients,
         absorption_coefficients=concatenated_two_stream_inputs.absorption_coefficients,
         path_lengths=path_lengths,
     )
+
+    return composite_two_stream_parameters

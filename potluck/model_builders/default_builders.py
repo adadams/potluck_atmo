@@ -41,7 +41,9 @@ from potluck.material.clouds.cloud_metrics import (
     convert_cloud_remaining_fraction_to_thickness,
 )
 from potluck.material.gases.molecular_metrics import (
+    calculate_C_to_O_ratio_by_xarray,
     calculate_mean_molecular_weight,
+    calculate_metallicity_by_xarray,
     calculate_total_number_density,
     mixing_ratios_to_number_densities_by_species,
 )
@@ -396,6 +398,7 @@ class PowerLawSlabCloudInputs(msgspec.Struct):
     single_scattering_albedo: NormalizedValue
     maximum_optical_depth_at_reference_wavelength: NonnegativeValue
     reference_wavelength_in_microns: NonnegativeValue = 1.00
+    areal_filling_fraction: NormalizedValue = 1.00
 
 
 class SingleLayerPowerLawSlabCloudInputs(msgspec.Struct):
@@ -413,6 +416,7 @@ class PowerLawSlabCloudSamples(msgspec.Struct):
     single_scattering_albedo: NormalizedValue
     maximum_optical_depth_at_reference_wavelength: NonnegativeValue
     reference_wavelength_in_microns: NonnegativeValue = 1.00
+    areal_filling_fraction: NormalizedValue = 1.00
 
 
 def create_power_law_cloud_inputs_from_samples(
@@ -423,6 +427,7 @@ def create_power_law_cloud_inputs_from_samples(
     single_scattering_albedo: NormalizedValue,
     maximum_optical_depth_at_reference_wavelength: NonnegativeValue,
     reference_wavelength_in_microns: NonnegativeValue,
+    areal_filling_fraction: NormalizedValue,
     maximum_log10_pressure: float,
 ) -> PowerLawSlabCloudInputs:
     cloud_log10_thickness: PositiveValue = (
@@ -441,6 +446,7 @@ def create_power_law_cloud_inputs_from_samples(
         single_scattering_albedo=single_scattering_albedo,
         maximum_optical_depth_at_reference_wavelength=maximum_optical_depth_at_reference_wavelength,
         reference_wavelength_in_microns=reference_wavelength_in_microns,
+        areal_filling_fraction=areal_filling_fraction,
     )
 
 
@@ -487,6 +493,7 @@ def calculate_power_law_cloud_opacity_at_reference_wavelength(
         reference_wavelength_in_microns=power_law_slab_cloud_inputs.reference_wavelength_in_microns,
         power_law_exponent=power_law_slab_cloud_inputs.power_law_exponent,
         single_scattering_albedo=power_law_slab_cloud_inputs.single_scattering_albedo,
+        areal_filling_fraction=power_law_slab_cloud_inputs.areal_filling_fraction,
     )
 
     return cloud_optical_depth_at_reference_wavelength
@@ -993,6 +1000,23 @@ def compile_vertical_structure_with_power_law_clouds(
         dask="parallelized",
     )
 
+    molecular_reference_dataset_filepath: Path = Path(
+        "/home/gba8kj/Documents/Astronomy/code/potluck/potluck/material/gases/reference_data/molecular_reference_data.nc"
+    )
+    molecular_reference_dataset: xr.Dataset = xr.open_dataset(
+        molecular_reference_dataset_filepath
+    )
+
+    metallicity: float = calculate_metallicity_by_xarray(
+        gas_number_densities_by_layer, molecular_reference_dataset
+    )
+    gas_number_densities_by_layer.attrs["metallicity"] = metallicity
+
+    c_to_o_ratio: NonnegativeValue = calculate_C_to_O_ratio_by_xarray(
+        gas_number_densities_by_layer, molecular_reference_dataset
+    )
+    gas_number_densities_by_layer.attrs["c_to_o"] = c_to_o_ratio
+
     for species in gas_chemistry.data_vars:
         gas_number_densities_by_layer[species].attrs = gas_chemistry[species].attrs
         gas_number_densities_by_layer[species].attrs["units"] = "cm^-3"
@@ -1371,6 +1395,136 @@ def build_forward_model(
     reference_data_node: xr.DataTree = xr.DataTree(
         name="reference_data",
         children={"gas_crosssection_catalog": crosssection_catalog_node},
+    )
+
+    temperature_profile_node: xr.DataTree = xr.DataTree(
+        name="temperature_profile_by_level",
+        dataset=temperature_profile.to_dataset(name="temperature"),
+    )
+
+    atmospheric_model: xr.DataTree = xr.DataTree(
+        name="atmospheric_model",
+        children={
+            "atmospheric_structure_by_layer": atmospheric_structure_by_layer,
+            "temperature_profile_by_level": temperature_profile_node,
+            "observable_parameters": observable_parameter_node,
+            "reference_data": reference_data_node,
+        },
+    )
+
+    return atmospheric_model
+
+
+def compile_crosssection_catalog_for_forward_model(
+    crosssection_catalog: xr.Dataset,
+    atmospheric_structure_by_layer: xr.DataTree,
+    crosssection_catalog_ready_to_use: bool = False,
+    filler_species: Optional[str] = "h2he",
+    h2_filler_fraction: Optional[float] = 0.83,
+) -> xr.DataTree:
+    crosssection_catalog_with_wavelengths_in_cm = convert_units(
+        crosssection_catalog, {"wavelength": "cm", "pressure": "barye"}
+    )
+
+    # TODO: in principle, this check can be done automatically. If its pressure and temperature
+    # coordinates match the pressure and temperature coordinates of the atmospheric structure,
+    # then the crosssection catalog is ready to use.
+    if crosssection_catalog_ready_to_use:
+        crosssection_catalog_interpolated_to_model: xr.Dataset = (
+            crosssection_catalog_with_wavelengths_in_cm
+        )
+
+    else:
+        pressures_by_layer: xr.DataArray = (
+            atmospheric_structure_by_layer.vertical_structure.pressures_by_layer
+        )
+
+        temperatures_by_layer: xr.DataArray = (
+            atmospheric_structure_by_layer.vertical_structure.temperatures_by_layer
+        )
+
+        species_present_in_model: Iterable[str] = (
+            atmospheric_structure_by_layer.gas_number_densities.data_vars.keys()
+        )
+
+        crosssection_catalog_interpolated_to_model: xr.Dataset = (
+            curate_gas_crosssection_catalog(
+                crosssection_catalog=crosssection_catalog_with_wavelengths_in_cm,
+                temperatures_by_layer=temperatures_by_layer,
+                pressures_by_layer=pressures_by_layer,
+                species_present_in_model=species_present_in_model,
+            )
+        )
+
+    if "hminus_number_densities" in atmospheric_structure_by_layer:
+        h_minus_opacity_factors: xr.Dataset = compute_h_minus_opacity_factors(
+            atmospheric_structure_by_layer["hminus_number_densities"].to_dataset(),
+            atmospheric_structure_by_layer["gas_number_densities"].get(filler_species),
+            h2_filler_fraction,
+        )
+
+        h_minus_opacity_crosssections: xr.Dataset = (
+            compile_anionic_opacity_crosssections(
+                h_minus_opacity_factors,
+                temperatures_by_layer,
+                crosssection_catalog.wavelength,
+            )
+        ).assign_coords(
+            wavelength=crosssection_catalog_with_wavelengths_in_cm.wavelength
+        )
+
+        crosssection_catalog_interpolated_to_model[filler_species] += (
+            h_minus_opacity_crosssections
+        )
+
+    crosssection_catalog_node: xr.DataTree = xr.DataTree(
+        name="crosssection_catalog",
+        dataset=crosssection_catalog_interpolated_to_model,
+    )
+
+    return crosssection_catalog_node
+
+
+def build_forward_model_with_Teff(
+    atmospheric_structure_by_layer: xr.DataTree,
+    temperature_profile: xr.DataArray,
+    crosssection_catalog: xr.Dataset,
+    Teff_catalog: xr.Dataset,
+    observable_inputs: xr.Dataset,
+    crosssection_catalog_ready_to_use: bool = False,  # i.e. it has been pre-interpolated, for example if the temperature profile is fixed
+    filler_species: Optional[str] = "h2he",
+    h2_filler_fraction: Optional[float] = 0.83,
+) -> xr.DataTree:
+    observable_parameter_node: xr.DataTree = xr.DataTree(
+        name="observable_parameters", dataset=observable_inputs
+    )
+
+    crosssection_catalog_node: xr.DataTree = (
+        compile_crosssection_catalog_for_forward_model(
+            crosssection_catalog=crosssection_catalog,
+            atmospheric_structure_by_layer=atmospheric_structure_by_layer,
+            crosssection_catalog_ready_to_use=crosssection_catalog_ready_to_use,
+            filler_species=filler_species,
+            h2_filler_fraction=h2_filler_fraction,
+        )
+    )
+
+    Teff_calculation_catalog_node: xr.DataTree = (
+        compile_crosssection_catalog_for_forward_model(
+            crosssection_catalog=Teff_catalog,
+            atmospheric_structure_by_layer=atmospheric_structure_by_layer,
+            crosssection_catalog_ready_to_use=crosssection_catalog_ready_to_use,
+            filler_species=filler_species,
+            h2_filler_fraction=h2_filler_fraction,
+        )
+    )
+
+    reference_data_node: xr.DataTree = xr.DataTree(
+        name="reference_data",
+        children={
+            "gas_crosssection_catalog": crosssection_catalog_node,
+            "Teff_calculation_catalog": Teff_calculation_catalog_node,
+        },
     )
 
     temperature_profile_node: xr.DataTree = xr.DataTree(
