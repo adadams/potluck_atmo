@@ -1,8 +1,12 @@
+from collections.abc import Callable
 from dataclasses import asdict, astuple
 from pathlib import Path
-from typing import Optional
+from typing import Final, Optional
 
+import jax
 import xarray as xr
+from jax import Array
+from jax import numpy as jnp
 
 from potluck.basic_types import NonnegativeValue, NormalizedValue, TemperatureValue
 from potluck.compile_crosssection_data import curate_gas_crosssection_catalog
@@ -39,6 +43,34 @@ from potluck.temperature.effective_temperature import calculate_effective_temper
 from potluck.xarray_functional_wrappers import XarrayOutputs
 
 current_directory: Path = Path(__file__).parent
+
+STREAM_COSINE_ANGLES: Final[Array] = jnp.array(
+    [
+        0.0446339553,
+        0.1443662570,
+        0.2868247571,
+        0.4548133152,
+        0.6280678354,
+        0.7856915206,
+        0.9086763921,
+        0.9822200849,
+    ],
+    dtype=jnp.float64,
+)
+
+STREAM_WEIGHTS: Final[Array] = jnp.array(
+    [
+        0.0032951914,
+        0.0178429027,
+        0.0454393195,
+        0.0791995995,
+        0.1060473494,
+        0.1125057995,
+        0.0911190236,
+        0.0445508044,
+    ],
+    dtype=jnp.float64,
+)
 
 
 # TODO: update with datatree input approach
@@ -322,7 +354,7 @@ def calculate_observed_fluxes_with_clouds_via_two_stream(
     return observed_twostream_flux
 
 
-def calculate_observed_fluxes_with_power_law_clouds_via_two_stream(
+def calculate_observed_fluxes_with_power_law_clouds_via_two_stream_previous(
     forward_model_inputs: xr.DataTree,
 ) -> xr.DataArray:
     temperatures_by_level: xr.DataArray = forward_model_inputs[
@@ -370,24 +402,25 @@ def calculate_observed_fluxes_with_power_law_clouds_via_two_stream(
     ]
 
     # for now, areal_filling_fractions must be the same for all clouds
-    number_of_distinct_filling_fractions: int = len(set(areal_filling_fractions))
+    # number_of_distinct_filling_fractions: int = len(set(areal_filling_fractions))
 
-    if number_of_distinct_filling_fractions > 1:
-        raise NotImplementedError(
-            "areal_filling_fraction must be the same for all clouds ",
-            "(the code to handle this is not yet implemented)",
-        )
+    # if number_of_distinct_filling_fractions > 1:
+    #    raise NotImplementedError(
+    #        "areal_filling_fraction must be the same for all clouds ",
+    #        "(the code to handle this is not yet implemented)",
+    #    )
 
     assumed_uniform_areal_filling_fraction: NormalizedValue = areal_filling_fractions[0]
 
     # TODO: there is probably a way to extend "set_result_name_and_units" so we can remove the tuple/class-like return structures
-    cloudy_two_stream_parameters: TwoStreamParameters = (
+    clear_two_stream_parameters, cloudy_two_stream_parameters = (
         compile_composite_two_stream_parameters_with_gas_and_power_law_clouds(
             wavelengths_in_cm=model_wavelengths_in_cm,
             gas_crosssections=gas_crosssection_catalog_as_dataarray,
             gas_number_density=number_densities_by_layer,
             path_lengths=path_lengths_in_cm,
             power_law_cloud_profiles=power_law_cloud_profiles,
+            return_clear_two_stream_parameters=True,
         )
     )
 
@@ -399,15 +432,6 @@ def calculate_observed_fluxes_with_power_law_clouds_via_two_stream(
 
     cloudy_emitted_twostream_flux: xr.DataArray = RT_Toon1989(
         *astuple(cloudy_RT_Toon1989_inputs)
-    )
-
-    clear_two_stream_parameters: TwoStreamParameters = (
-        compile_composite_two_stream_parameters_with_gas_only(
-            wavelengths_in_cm=model_wavelengths_in_cm,
-            crosssections=gas_crosssection_catalog_as_dataarray,
-            number_density=number_densities_by_layer,
-            path_lengths=path_lengths_in_cm,
-        )
     )
 
     clear_RT_Toon1989_inputs: RTToon1989Inputs = RTToon1989Inputs(
@@ -430,6 +454,134 @@ def calculate_observed_fluxes_with_power_law_clouds_via_two_stream(
     )
 
     observed_twostream_flux: xr.DataArray = (
+        (
+            emitted_twostream_flux
+            * (
+                vertical_structure_by_layer.planet_radius
+                / forward_model_inputs["observable_parameters"].distance_to_system
+            )
+            ** 2
+        )
+        .rename("observed_twostream_flux")
+        .assign_attrs(**custom_model_metrics)
+    )
+
+    return observed_twostream_flux
+
+
+def calculate_observed_fluxes_with_power_law_clouds_via_two_stream(
+    forward_model_inputs: xr.DataTree,
+) -> xr.DataArray:
+    temperatures_by_level: xr.DataArray = forward_model_inputs[
+        "temperature_profile_by_level"
+    ].temperature
+
+    atmospheric_structure_by_layer: xr.DataArray = forward_model_inputs[
+        "atmospheric_structure_by_layer"
+    ]
+
+    vertical_structure_by_layer: xr.DataArray = atmospheric_structure_by_layer[
+        "vertical_structure"
+    ]
+
+    number_densities_by_layer: xr.DataArray = (
+        atmospheric_structure_by_layer["gas_number_densities"]
+        .to_dataset()
+        .to_dataarray(dim="species")
+    )
+
+    gas_crosssection_catalog: xr.Dataset = forward_model_inputs["reference_data"][
+        "gas_crosssection_catalog"
+    ].to_dataset()
+
+    gas_crosssection_catalog_as_dataarray: xr.DataArray = (
+        gas_crosssection_catalog.to_array(dim="species", name="crosssections")
+    )
+
+    model_wavelengths_in_cm: xr.DataArray = gas_crosssection_catalog.wavelength
+
+    thermal_intensities: xr.Dataset = compile_thermal_structure_for_forward_model(
+        temperatures_by_level=temperatures_by_level,
+        model_wavelengths_in_cm=model_wavelengths_in_cm,
+    )
+
+    path_lengths_in_cm: xr.DataArray = vertical_structure_by_layer.path_lengths
+
+    power_law_cloud_profiles: xr.Dataset = forward_model_inputs[
+        "atmospheric_structure_by_layer"
+    ]["cloud_reference_optical_depths"].to_dataset()
+
+    areal_filling_fractions: list[NonnegativeValue] = [
+        cloud_profile.attrs["areal_filling_fraction"]
+        for cloud_profile in power_law_cloud_profiles.data_vars.values()
+    ]
+
+    assumed_uniform_areal_filling_fraction: NormalizedValue = areal_filling_fractions[0]
+
+    clear_two_stream_parameters, cloudy_two_stream_parameters = (
+        compile_composite_two_stream_parameters_with_gas_and_power_law_clouds(
+            wavelengths_in_cm=model_wavelengths_in_cm,
+            gas_crosssections=gas_crosssection_catalog_as_dataarray,
+            gas_number_density=number_densities_by_layer,
+            path_lengths=path_lengths_in_cm,
+            power_law_cloud_profiles=power_law_cloud_profiles,
+            return_clear_two_stream_parameters=True,
+        )
+    )
+
+    batched_scattering_asymmetry_parameters: Array = jnp.stack(
+        [
+            clear_two_stream_parameters.scattering_asymmetry_parameter.values,
+            cloudy_two_stream_parameters.scattering_asymmetry_parameter.values,
+        ]
+    )
+    batched_single_scattering_albedo: Array = jnp.stack(
+        [
+            clear_two_stream_parameters.single_scattering_albedo.values,
+            cloudy_two_stream_parameters.single_scattering_albedo.values,
+        ]
+    )
+    batched_optical_depth: Array = jnp.stack(
+        [
+            clear_two_stream_parameters.optical_depth.values,
+            cloudy_two_stream_parameters.optical_depth.values,
+        ]
+    )
+
+    batched_RT_function: Callable = jax.vmap(
+        RT_Toon1989, in_axes=(None, None, 0, 0, 0, None, None)
+    )
+
+    clear_emitted_twostream_flux, cloudy_emitted_twostream_flux = batched_RT_function(
+        thermal_intensities.thermal_intensity_by_layer.values,
+        thermal_intensities.delta_thermal_intensity_by_layer.values,
+        batched_scattering_asymmetry_parameters,
+        batched_single_scattering_albedo,
+        batched_optical_depth,
+        STREAM_COSINE_ANGLES,
+        STREAM_WEIGHTS,
+    )
+
+    combined_emitted_flux = (
+        assumed_uniform_areal_filling_fraction * cloudy_emitted_twostream_flux
+    ) + ((1.0 - assumed_uniform_areal_filling_fraction) * clear_emitted_twostream_flux)
+
+    emitted_twostream_flux = xr.DataArray(
+        data=combined_emitted_flux,
+        dims=("wavelength",),
+        coords={"wavelength": model_wavelengths_in_cm},
+        attrs={
+            "units": "erg/s/cm^2/cm",
+            "areal_filling_fraction": assumed_uniform_areal_filling_fraction,
+        },
+        name="emitted_twostream_flux",
+    )
+
+    custom_model_metrics = compile_custom_model_metrics(
+        forward_model_inputs=forward_model_inputs, emission_flux=emitted_twostream_flux
+    )
+
+    observed_twostream_flux = (
         (
             emitted_twostream_flux
             * (

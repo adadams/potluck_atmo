@@ -170,6 +170,7 @@ def compile_composite_two_stream_parameters_with_gas_and_power_law_clouds(
     gas_number_density: xr.DataArray,  # (species, pressure))
     path_lengths: xr.DataArray,  # (pressure,)
     power_law_cloud_profiles: xr.Dataset,  # each array is a cloud profile, with (pressure,)
+    return_clear_two_stream_parameters: bool = False,
 ) -> TwoStreamParameters:
     gas_two_stream_inputs: xr.Dataset = compile_gas_two_stream_inputs(
         wavelengths_in_cm, gas_crosssections, gas_number_density
@@ -208,8 +209,23 @@ def compile_composite_two_stream_parameters_with_gas_and_power_law_clouds(
     ).sum("cloud_slab")
     # cumulative_cloud_two_stream_inputs.to_netcdf("power_law_cloud_two_stream_inputs_at_reference_wavelength.nc")
 
-    return compile_composite_two_stream_parameters(
-        [gas_two_stream_inputs, cumulative_cloud_two_stream_inputs], path_lengths
+    return (
+        (
+            compile_two_stream_parameters(
+                gas_two_stream_inputs.forward_scattering_coefficients,
+                gas_two_stream_inputs.backward_scattering_coefficients,
+                gas_two_stream_inputs.absorption_coefficients,
+                path_lengths,
+            ),
+            compile_composite_two_stream_parameters(
+                [gas_two_stream_inputs, cumulative_cloud_two_stream_inputs],
+                path_lengths,
+            ),
+        )
+        if return_clear_two_stream_parameters
+        else compile_composite_two_stream_parameters(
+            [gas_two_stream_inputs, cumulative_cloud_two_stream_inputs], path_lengths
+        )
     )
 
 

@@ -50,3 +50,6 @@ pyROX/
 compare_with_pRT/
 potluck/retrieval/export_intermediate_retrieval_results.py
 potluck/curate_TauREX_molecular_crosssections_for_Teff.py
+potluck/model_builders/look_at_bad_case.py
+potluck/radiative_transfer/RT_Toon1989_jax_preoptimization.py
+potluck/radiative_transfer/RT_Toon1989_jax_newidea.py

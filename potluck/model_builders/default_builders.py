@@ -1000,11 +1000,16 @@ def compile_vertical_structure_with_power_law_clouds(
         dask="parallelized",
     )
 
-    molecular_reference_dataset_filepath: Path = Path(
-        "/home/gba8kj/Documents/Astronomy/code/potluck/potluck/material/gases/reference_data/molecular_reference_data.nc"
+    molecular_reference_dataset_filepath: Path = (
+        project_directory
+        / "material"
+        / "gases"
+        / "reference_data"
+        / "molecular_reference_data.nc"
     )
+
     molecular_reference_dataset: xr.Dataset = xr.open_dataset(
-        molecular_reference_dataset_filepath
+        molecular_reference_dataset_filepath, engine="h5netcdf"
     )
 
     metallicity: float = calculate_metallicity_by_xarray(
@@ -1742,6 +1747,7 @@ def calculate_power_law_cloudy_emission_model_with_spectral_groups(
     emission_fluxes = calculate_observed_fluxes_with_power_law_clouds_via_two_stream(
         forward_model_inputs=forward_model_inputs
     )
+    # emission_fluxes.to_netcdf(current_directory / "test.nc")
 
     observable_parameters: xr.Dataset = forward_model_inputs[
         "observable_parameters"
@@ -1751,10 +1757,17 @@ def calculate_power_law_cloudy_emission_model_with_spectral_groups(
         observable_parameters.wavelength.groupby("spectral_group")
     )
 
+    emission_fluxes_cut_to_data: xr.DataArray = emission_fluxes.sel(
+        wavelength=slice(
+            observable_parameters.wavelength.min() - 1e-4,
+            observable_parameters.wavelength.max() + 1e-4,
+        )
+    )
+
     def resample_spectrum_per_group(
         spectral_group_wavelengths: xr.DataArray,
-        model_wavelengths: xr.DataArray = emission_fluxes.wavelength,
-        model_fluxes: xr.DataArray = emission_fluxes,
+        model_wavelengths: xr.DataArray = emission_fluxes_cut_to_data.wavelength,
+        model_fluxes: xr.DataArray = emission_fluxes_cut_to_data,
         resampling_fwhm_fraction: float = resampling_fwhm_fraction,
     ) -> xr.DataArray:
         return resample_spectral_quantity_to_new_wavelengths(
@@ -1765,8 +1778,10 @@ def calculate_power_law_cloudy_emission_model_with_spectral_groups(
         )
 
     emission_fluxes_sampled_to_data: xr.DataArray = (
-        reference_model_wavelengths.map(resample_spectrum_per_group)
-    ).rename("resampled_emission_flux")
+        (reference_model_wavelengths.map(resample_spectrum_per_group))
+        .rename("resampled_emission_flux")
+        .assign_attrs(**emission_fluxes.attrs)
+    )
 
     return emission_fluxes_sampled_to_data
 

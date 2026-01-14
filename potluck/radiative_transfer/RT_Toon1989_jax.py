@@ -111,7 +111,7 @@ def RT_Toon1989(
     stream_cosine_angles: Array,
     stream_weights: Array,
 ) -> Array:
-    terms_for_DSolver = calculate_terms_for_DSolver(
+    terms_for_DSolver, (lamda, gama) = calculate_terms_for_DSolver(
         optical_depth,
         single_scattering_albedo,
         scattering_asymmetry_parameter,
@@ -127,6 +127,8 @@ def RT_Toon1989(
         optical_depth,
         single_scattering_albedo,
         scattering_asymmetry_parameter,
+        lamda,
+        gama,
         thermal_intensity,
         delta_thermal_intensity,
         xki_terms,
@@ -159,7 +161,10 @@ def calculate_terms_for_DSolver(
     thermal_intensity: Array,
     delta_thermal_intensity: Array,
     mu_1: float = 0.5,
-) -> Tuple[Array, Array, Array, Array, Array, Array, Array, Array]:
+) -> Tuple[
+    Tuple[Array, Array, Array, Array, Array, Array, Array, Array],
+    Tuple[Array, Array, Array],
+]:
     tau: Array = optical_depth
     w0: Array = single_scattering_albedo
     g: Array = scattering_asymmetry_parameter
@@ -202,7 +207,7 @@ def calculate_terms_for_DSolver(
         bottom_layer
     ] * (mu_1 / tbfrac)
 
-    return (cp, cpm1, cm, cmm1, inverse_ep, btop, bottom, gama)
+    return (cp, cpm1, cm, cmm1, inverse_ep, btop, bottom, gama), (lamda, gama)
 
 
 """
@@ -297,67 +302,52 @@ def DTRIDGL_subroutine(
     cfs: Array,
     dfs: Array,
 ) -> Array:
-    af_base: Array = afs[bottom_layer]
-    bf_base: Array = bfs[bottom_layer]
-    df_base: Array = dfs[bottom_layer]
+    number_of_rows = afs.shape[-1]
 
-    as_base: Array = af_base / bf_base
-    ds_base: Array = df_base / bf_base
+    as_base = afs[:, -1] / bfs[:, -1]
+    ds_base = dfs[:, -1] / bfs[:, -1]
+    init_carry_back = (as_base, ds_base)
 
-    as_terms: Array = jnp.empty_like(afs, dtype=jnp.float64)
-    as_terms = as_terms.at[bottom_layer].set(as_base)
-
-    ds_terms: Array = jnp.empty_like(afs, dtype=jnp.float64)
-    ds_terms = ds_terms.at[bottom_layer].set(ds_base)
-
-    twice_number_of_layers: int = jnp.shape(afs)[-1]
-
-    def body_fn(carry, half_layer_val):
-        as_terms_loop, ds_terms_loop = carry
-
-        current_afs_col = afs[:, half_layer_val - 1]
-        current_bfs_col = bfs[:, half_layer_val - 1]
-        current_cfs_col = cfs[:, half_layer_val - 1]
-        current_dfs_col = dfs[:, half_layer_val - 1]
-        current_as_terms_col = as_terms_loop[:, half_layer_val]
-        current_ds_terms_col = ds_terms_loop[:, half_layer_val]
-
-        xx = 1.0 / (current_bfs_col - current_cfs_col * current_as_terms_col)
-
-        new_as_val = current_afs_col * xx
-        new_ds_val = (current_dfs_col - current_cfs_col * current_ds_terms_col) * xx
-
-        as_terms_loop = as_terms_loop.at[:, half_layer_val - 1].set(new_as_val)
-        ds_terms_loop = ds_terms_loop.at[:, half_layer_val - 1].set(new_ds_val)
-
-        return (
-            as_terms_loop,
-            ds_terms_loop,
-        ), None
-
-    init_carry = (as_terms, ds_terms)
-    (as_terms, ds_terms), _ = jax.lax.scan(
-        body_fn, init_carry, jnp.arange(twice_number_of_layers - 1, -1, -1)
+    rev_idx = jnp.arange(number_of_rows - 2, -1, -1)
+    scan_inputs_back = (
+        afs[:, rev_idx].T,
+        bfs[:, rev_idx].T,
+        cfs[:, rev_idx].T,
+        dfs[:, rev_idx].T,
     )
 
-    xki_terms: Array = jnp.empty_like(ds_terms)
-    xki_terms = xki_terms.at[:, 0].set(ds_terms[:, 0])
+    def backward_elimination_fn(carry, inputs):
+        as_next, ds_next = carry
+        a_i, b_i, c_i, d_i = inputs
 
-    def body_fn_forward_scan(xki_terms, half_layer_val):
-        as_term_col = as_terms[:, half_layer_val + 1]
-        ds_term_col = ds_terms[:, half_layer_val + 1]
+        xx = 1.0 / (b_i - c_i * as_next)
+        new_as = a_i * xx
+        new_ds = (d_i - c_i * ds_next) * xx
 
-        current_xki_terms = xki_terms[:, half_layer_val]
+        return (new_as, new_ds), (new_as, new_ds)
 
-        xki_terms = xki_terms.at[:, half_layer_val + 1].set(
-            ds_term_col - as_term_col * current_xki_terms
-        )
-
-        return xki_terms, None
-
-    xki_terms, _ = jax.lax.scan(
-        body_fn_forward_scan, xki_terms, jnp.arange(0, twice_number_of_layers - 1)
+    _, (as_stack, ds_stack) = jax.lax.scan(
+        backward_elimination_fn, init_carry_back, scan_inputs_back
     )
+
+    as_terms = jnp.concatenate([as_stack[::-1].T, as_base[:, None]], axis=-1)
+    ds_terms = jnp.concatenate([ds_stack[::-1].T, ds_base[:, None]], axis=-1)
+
+    xki_0 = ds_terms[:, 0]
+
+    fwd_idx = jnp.arange(1, number_of_rows)
+    scan_inputs_fwd = (as_terms[:, fwd_idx].T, ds_terms[:, fwd_idx].T)
+
+    def forward_substitution_fn(xki_prev, inputs):
+        as_i, ds_i = inputs
+
+        new_xki = ds_i - as_i * xki_prev
+
+        return new_xki, new_xki
+
+    _, xki_stack = jax.lax.scan(forward_substitution_fn, xki_0, scan_inputs_fwd)
+
+    xki_terms = jnp.concatenate([xki_0[:, None], xki_stack.T], axis=-1)
 
     return xki_terms
 
@@ -367,6 +357,8 @@ def calculate_flux(
     optical_depth: Array,
     single_scattering_albedo: Array,
     scattering_asymmetry_parameter: Array,
+    lamda: Array,
+    gama: Array,
     thermal_intensity: Array,
     delta_thermal_intensity: Array,
     xki_terms: Array,
@@ -389,9 +381,6 @@ def calculate_flux(
     xk1_terms: Array = even_xki_terms + odd_xki_terms
     xk2_terms: Array = even_xki_terms - odd_xki_terms
 
-    alpha: Array = jnp.sqrt((1.0 - w0) / (1.0 - w0 * g))
-    lamda: Array = alpha * (1.0 - w0 * g) / mu_1
-    gama: Array = (1.0 - alpha) / (1.0 + alpha)
     lamda_x_tau: Array = lamda * tau
 
     term: Array = 1.0 / (2.0 * (1.0 - w0 * g))
@@ -443,65 +432,47 @@ def calculate_flux(
         * (thermal_intensity_at_base[:, 0] + delta_thermal_intensity_by_angle_at_base)
     )
 
-    fpt_terms_shape = (
-        delta_thermal_intensity_by_angle.shape[0],
-        delta_thermal_intensity_by_angle.shape[1],
-        delta_thermal_intensity_by_angle.shape[2],
+    rev_idx = jnp.arange(number_of_layers - 1, -1, -1)
+
+    scan_inputs = (
+        tau[:, rev_idx].T,  # (layers, wavelengths)
+        lamda[:, rev_idx].T,  # (layers, wavelengths)
+        em1_terms[:, rev_idx].T,  # (layers, wavelengths)
+        em2_terms[:, :, rev_idx].transpose(2, 0, 1),  # (layers, angles, wavelengths)
+        em3_terms[:, :, rev_idx].transpose(2, 0, 1),  # (layers, angles, wavelengths)
+        gg_terms[:, rev_idx].T,  # (layers, wavelengths)
+        hh_terms[:, rev_idx].T,  # (layers, wavelengths)
+        alpha1[:, rev_idx].T,  # (layers, wavelengths)
+        alpha2[:, rev_idx].T,  # (layers, wavelengths)
     )
 
-    fpt_terms: Array = jnp.zeros(fpt_terms_shape, dtype=jnp.float64)
-    fpt_terms = fpt_terms.at[:, :, -1].set(fpt_base)
+    cos_angle_val_for_broadcast: Array = stream_cosine_angles[:, None]
 
-    stream_cosine_angles_by_layer: Array = stream_cosine_angles_expanded[:, 0, 0]
-    stream_weights_by_layer: Array = stream_weights
+    def body_fn_flux_scan_optimized(current_flux_slice: Array, layer_data: tuple):
+        (tau_l, lam_l, em1_l, em2_l, em3_l, gg_l, hh_l, a1_l, a2_l) = layer_data
 
-    def body_fn_flux_scan(fpt_terms_loop: Array, layer_val: int):
-        current_fpt_term_slice = fpt_terms_loop[:, :, layer_val]
-        tau_layer_expanded = tau[:, layer_val][None, :]
-        lamda_layer_expanded = lamda[:, layer_val][None, :]
-
-        em1_terms_layer_expanded = em1_terms[:, layer_val][None, :]
-        em2_terms_layer_expanded = em2_terms[:, :, layer_val]
-        em3_terms_layer_expanded = em3_terms[:, :, layer_val]
-
-        gg_terms_layer_expanded = gg_terms[:, layer_val][None, :]
-        hh_terms_layer_expanded = hh_terms[:, layer_val][None, :]
-        alpha1_layer_expanded = alpha1[:, layer_val][None, :]
-        alpha2_layer_expanded = alpha2[:, layer_val][None, :]
-
-        cos_angle_val_for_broadcast = stream_cosine_angles_by_layer[:, None]
-
-        term_1: Array = current_fpt_term_slice * em2_terms_layer_expanded
-        term_2: Array = (
-            gg_terms_layer_expanded
-            / (lamda_layer_expanded * cos_angle_val_for_broadcast - 1.0)
-            * (em2_terms_layer_expanded - em1_terms_layer_expanded)
-        )
-        term_3: Array = (
-            hh_terms_layer_expanded
-            / (lamda_layer_expanded * cos_angle_val_for_broadcast + 1.0)
-            * (1.0 - em3_terms_layer_expanded)
-        )
-        term_4: Array = alpha1_layer_expanded * (
-            1.0 - em2_terms_layer_expanded
-        ) + alpha2_layer_expanded * (
-            cos_angle_val_for_broadcast
-            - em2_terms_layer_expanded
-            * (tau_layer_expanded + cos_angle_val_for_broadcast)
+        tau_l, lam_l, em1_l = tau_l[None, :], lam_l[None, :], em1_l[None, :]
+        gg_l, hh_l, a1_l, a2_l = (
+            gg_l[None, :],
+            hh_l[None, :],
+            a1_l[None, :],
+            a2_l[None, :],
         )
 
-        new_fpt_value: Array = term_1 + term_2 + term_3 + term_4
+        term_1 = current_flux_slice * em2_l
+        term_2 = gg_l / (lam_l * cos_angle_val_for_broadcast - 1.0) * (em2_l - em1_l)
+        term_3 = hh_l / (lam_l * cos_angle_val_for_broadcast + 1.0) * (1.0 - em3_l)
+        term_4 = a1_l * (1.0 - em2_l) + a2_l * (
+            cos_angle_val_for_broadcast - em2_l * (tau_l + cos_angle_val_for_broadcast)
+        )
 
-        fpt_terms_loop = fpt_terms_loop.at[:, :, layer_val - 1].set(new_fpt_value)
+        new_flux_slice = term_1 + term_2 + term_3 + term_4
 
-        return fpt_terms_loop, None
+        return new_flux_slice, new_flux_slice
 
-    fpt_terms, _ = jax.lax.scan(
-        body_fn_flux_scan, fpt_terms, jnp.arange(number_of_layers - 1, 0, -1)
+    final_TOA_flux_slice, _ = jax.lax.scan(
+        body_fn_flux_scan_optimized, fpt_base, scan_inputs
     )
-
-    fpt_at_top: Array = fpt_terms[:, :, 0]
-
-    total_flux: Array = jnp.sum(stream_weights_by_layer[:, None] * fpt_at_top, axis=0)
+    total_flux: Array = jnp.sum(stream_weights[:, None] * final_TOA_flux_slice, axis=0)
 
     return total_flux
