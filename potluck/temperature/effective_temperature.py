@@ -12,7 +12,7 @@ def calculate_effective_temperature(
 
     bolometric_emission_flux: xr.DataArray = calculate_spectrally_integrated_flux(
         emission_flux_density
-    ).nansum("wavelength", skipna=True)
+    ).sum("wavelength", skipna=True)
 
     effective_temperature: TemperatureValue = (
         (bolometric_emission_flux / STEFAN_BOLTZMANN_CONSTANT_IN_CGS) ** (1 / 4)
